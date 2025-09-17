@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup": "cp .env.example .env.local && echo 'Environment file created! Edit .env.local with your details, then run npm run dev'"
   },
   "dependencies": {
     "next": "14.2.7",
