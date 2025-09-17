@@ -24,7 +24,11 @@ interface UseWanderingPhysicsProps {
   avoidanceDistance?: number
   avoidanceStrength?: number
   wanderStrength?: number
+  driftStrength?: number
   boundaryPadding?: number
+  enableSpeedNormalization?: boolean
+  driftUpdateInterval?: number
+  smoothing?: number
 }
 
 export function useWanderingPhysics({
@@ -34,7 +38,11 @@ export function useWanderingPhysics({
   avoidanceDistance = 120,
   avoidanceStrength = 0.8,
   wanderStrength = 0.3,
-  boundaryPadding = 50
+  driftStrength = 0.5,
+  boundaryPadding = 50,
+  enableSpeedNormalization = true,
+  driftUpdateInterval = 8000,
+  smoothing = 0.95
 }: UseWanderingPhysicsProps): Position {
   const [position, setPosition] = useState<Position>({
     x: Math.random() * (window?.innerWidth || 800),
@@ -68,13 +76,13 @@ export function useWanderingPhysics({
 
       // Brownian motion components
       // 1. Drift term (persistent directional bias)
-      if (timestamp - lastDriftUpdate.current > 8000 + Math.random() * 4000) {
-        // Update drift direction every 8-12 seconds
+      if (timestamp - lastDriftUpdate.current > driftUpdateInterval + Math.random() * (driftUpdateInterval * 0.5)) {
+        // Update drift direction based on configurable interval
         driftAngleRef.current += (Math.random() - 0.5) * Math.PI * 0.5 // ±45 degree changes
         lastDriftUpdate.current = timestamp
       }
 
-      const driftForce = baseSpeed * 0.3 // 30% of base speed as drift
+      const driftForce = baseSpeed * driftStrength // Configurable drift strength
       const driftX = Math.cos(driftAngleRef.current) * driftForce
       const driftY = Math.sin(driftAngleRef.current) * driftForce
 
@@ -117,16 +125,17 @@ export function useWanderingPhysics({
         vy -= edgeForce * (1 - (windowHeight - position.y - wheelSize) / boundaryPadding)
       }
 
-      // Normalize velocity to maintain consistent speed
-      const currentSpeed = Math.sqrt(vx * vx + vy * vy)
-      if (currentSpeed > 0) {
-        const targetSpeed = baseSpeed
-        vx = (vx / currentSpeed) * targetSpeed
-        vy = (vy / currentSpeed) * targetSpeed
+      // Optionally normalize velocity to maintain consistent speed
+      if (enableSpeedNormalization) {
+        const currentSpeed = Math.sqrt(vx * vx + vy * vy)
+        if (currentSpeed > 0) {
+          const targetSpeed = baseSpeed
+          vx = (vx / currentSpeed) * targetSpeed
+          vy = (vy / currentSpeed) * targetSpeed
+        }
       }
 
-      // Apply some momentum/smoothing
-      const smoothing = 0.95
+      // Apply configurable momentum/smoothing
       velocityRef.current.x = velocityRef.current.x * smoothing + vx * (1 - smoothing)
       velocityRef.current.y = velocityRef.current.y * smoothing + vy * (1 - smoothing)
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Brain, Code, Heart, Flower } from 'lucide-react'
 import { content, type LensId } from '@/lib/content'

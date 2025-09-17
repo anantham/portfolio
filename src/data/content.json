@@ -76,13 +76,17 @@
   },
   "physics": {
     "dharmaWheel": {
-      "baseSpeed": 0.5,
+      "baseSpeed": 6.0,
       "avoidanceDistance": 120,
       "avoidanceStrength": 0.8,
-      "wanderStrength": 0.3,
-      "boundaryPadding": 50,
+      "wanderStrength": 0.05,
+      "driftStrength": 2.0,
+      "boundaryPadding": 0,
       "opacity": 0.25,
-      "size": 80
+      "size": 80,
+      "enableSpeedNormalization": false,
+      "driftUpdateInterval": 60000,
+      "smoothing": 0.5
     }
   },
   "lensMapping": {

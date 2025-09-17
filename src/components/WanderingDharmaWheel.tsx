@@ -31,7 +31,11 @@ export default function WanderingDharmaWheel({
     avoidanceDistance: config.avoidanceDistance,
     avoidanceStrength: config.avoidanceStrength,
     wanderStrength: config.wanderStrength,
-    boundaryPadding: config.boundaryPadding
+    driftStrength: config.driftStrength,
+    boundaryPadding: config.boundaryPadding,
+    enableSpeedNormalization: config.enableSpeedNormalization,
+    driftUpdateInterval: config.driftUpdateInterval,
+    smoothing: config.smoothing
   })
 
   // Respect reduced motion preference
