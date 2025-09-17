@@ -10,11 +10,12 @@
     "setup": "cp .env.example .env.local && echo 'Environment file created! Edit .env.local with your details, then run npm run dev'"
   },
   "dependencies": {
-    "next": "14.2.7",
-    "react": "^18",
-    "react-dom": "^18",
+    "autoprefixer": "^10.4.21",
+    "framer-motion": "^11.3.28",
     "lucide-react": "^0.436.0",
-    "framer-motion": "^11.3.28"
+    "next": "^14.2.32",
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
     "@types/node": "^20",

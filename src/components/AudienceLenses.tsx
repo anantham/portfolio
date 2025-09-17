@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Brain, Code, Heart, Lotus } from 'lucide-react'
+import { Brain, Code, Heart, Flower } from 'lucide-react'
 
 type Lens = 'lw-math' | 'engineer' | 'embodied' | 'buddhist'
 
@@ -49,7 +49,7 @@ const lenses: LensData[] = [
     title: 'Buddhist-Curious',
     subtitle: 'Contemplative • Seeking',
     description: 'Approach through contemplative practice, the noble truths, and the cultivation of wisdom, compassion, and direct experiential knowledge.',
-    icon: Lotus,
+    icon: Flower,
     color: 'text-dharma-400',
     gradient: 'from-dharma-500/20 to-yellow-500/20'
   }
