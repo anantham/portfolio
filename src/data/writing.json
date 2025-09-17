@@ -1,0 +1,89 @@
+{
+  "posts": [
+    {
+      "id": "noble-truths-software",
+      "title": "The Noble Truths in Software Development",
+      "description": "Exploring how the Four Noble Truths apply to our relationship with technology and building software that serves rather than enslaves.",
+      "pubDate": "2024-09-15T10:00:00.000Z",
+      "author": "Aditya Arpitha",
+      "tags": ["buddhism", "technology", "dharma", "contemplative"],
+      "excerpt": "The First Noble Truth tells us that suffering exists. In software development, this manifests as technical debt, feature creep, and the endless cycle of build-ship-fix...",
+      "readTime": "8 min read",
+      "featured": true,
+      "lensRelevance": {
+        "buddhist": 1.0,
+        "engineer": 0.7,
+        "lw-math": 0.4,
+        "embodied": 0.3
+      }
+    },
+    {
+      "id": "bridges-rationalist-buddhist",
+      "title": "Building Bridges Between LessWrong and Buddhist Communities",
+      "description": "On finding common ground between rationalist epistemology and contemplative wisdom traditions.",
+      "pubDate": "2024-09-08T14:30:00.000Z",
+      "author": "Aditya Arpitha",
+      "tags": ["rationality", "buddhism", "community", "epistemology"],
+      "excerpt": "Both traditions share a commitment to seeing reality clearly, though they approach this goal through different methods. The rationalist asks 'What is true?' while the Buddhist asks 'What is the nature of mind?'",
+      "readTime": "12 min read",
+      "featured": false,
+      "lensRelevance": {
+        "lw-math": 1.0,
+        "buddhist": 0.9,
+        "embodied": 0.5,
+        "engineer": 0.3
+      }
+    },
+    {
+      "id": "digital-rituals",
+      "title": "The Art of Crafting Digital Rituals",
+      "description": "How we can create meaningful, embodied practices in our increasingly digital lives.",
+      "pubDate": "2024-09-01T09:15:00.000Z",
+      "author": "Aditya Arpitha",
+      "tags": ["ritual", "technology", "embodiment", "practice"],
+      "excerpt": "A ritual is a container for transformation. In the digital realm, we need new containers—interfaces, interactions, and experiences that honor both efficiency and the sacred...",
+      "readTime": "6 min read",
+      "featured": false,
+      "lensRelevance": {
+        "embodied": 1.0,
+        "buddhist": 0.8,
+        "engineer": 0.6,
+        "lw-math": 0.2
+      }
+    },
+    {
+      "id": "systematic-culture-design",
+      "title": "Systematic Approaches to Culture Design",
+      "description": "Applying systems thinking and mathematical models to understand how cultures emerge and evolve.",
+      "pubDate": "2024-08-25T16:20:00.000Z",
+      "author": "Aditya Arpitha",
+      "tags": ["systems", "culture", "models", "design"],
+      "excerpt": "Culture isn't random—it emerges from underlying dynamics and feedback loops. By understanding these patterns, we can more intentionally craft the communities we want to see...",
+      "readTime": "10 min read",
+      "featured": false,
+      "lensRelevance": {
+        "lw-math": 1.0,
+        "engineer": 0.7,
+        "embodied": 0.3,
+        "buddhist": 0.4
+      }
+    },
+    {
+      "id": "tools-for-connection",
+      "title": "Building Tools for Human Connection",
+      "description": "How thoughtful engineering can create digital spaces that foster genuine relationships.",
+      "pubDate": "2024-08-18T11:45:00.000Z",
+      "author": "Aditya Arpitha",
+      "tags": ["tools", "connection", "engineering", "community"],
+      "excerpt": "Most social platforms optimize for engagement, not connection. What would technology look like if we designed for depth over surface, for understanding over addiction?",
+      "readTime": "7 min read",
+      "featured": false,
+      "lensRelevance": {
+        "engineer": 1.0,
+        "embodied": 0.6,
+        "lw-math": 0.5,
+        "buddhist": 0.4
+      }
+    }
+  ]
+}

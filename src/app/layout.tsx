@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import Footer from '@/components/Footer'
 import WanderingDharmaWheel from '@/components/WanderingDharmaWheel'
+import { LensProvider } from '@/contexts/LensContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -34,12 +35,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-zen-900 text-zen-50 antialiased`}>
-        <div className="min-h-screen zen-gradient">
-          {/* Wandering dharma wheel in background */}
-          <WanderingDharmaWheel />
-          {children}
-          <Footer />
-        </div>
+        <LensProvider>
+          <div className="min-h-screen zen-gradient">
+            {/* Wandering dharma wheel in background */}
+            <WanderingDharmaWheel />
+            {children}
+            <Footer />
+          </div>
+        </LensProvider>
       </body>
     </html>
   )

@@ -1,0 +1,110 @@
+{
+  "site": {
+    "tagline": "A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.",
+    "description": "Building bridges between niche subcultures through tools, essays, and contemplative practice.",
+    "quote": {
+      "text": "Notice the music playing at the scale of days or weeks, but invite yourself to zoom out and consider the periodic rhythms that exist at the scale of years or decades.",
+      "attribution": null
+    }
+  },
+  "hero": {
+    "title": {
+      "main": "Building Bridges to",
+      "highlight": "Niche Subcultures"
+    },
+    "buttons": {
+      "primary": {
+        "text": "Join the Reading List",
+        "action": "telegram"
+      },
+      "secondary": {
+        "text": "Explore My Work",
+        "action": "scroll_to_projects"
+      }
+    }
+  },
+  "lenses": {
+    "title": "How would you like to meet me today?",
+    "subtitle": "Choose a lens that resonates with you. Each perspective offers a different way to explore my work, writing, and the bridges I'm building between communities.",
+    "archetypes": [
+      {
+        "id": "lw-math",
+        "title": "LW/Math",
+        "subtitle": "Rationalist • Systematic",
+        "description": "Explore through the lens of rational thought, mathematical models, and systematic approaches to understanding culture and human coordination.",
+        "tags": ["rationality", "systems", "models", "coordination", "lesswrong"]
+      },
+      {
+        "id": "engineer",
+        "title": "Applied Engineer",
+        "subtitle": "Builder • Pragmatic",
+        "description": "Focus on tools, implementations, and practical applications. See how ideas translate into working systems and real-world impact.",
+        "tags": ["tools", "implementation", "systems", "pragmatic", "building"]
+      },
+      {
+        "id": "embodied",
+        "title": "Embodied",
+        "subtitle": "Somatic • Intuitive",
+        "description": "Engage through felt sense, embodied knowledge, and the wisdom that lives in our bodies and nervous systems.",
+        "tags": ["embodied", "somatic", "intuitive", "feeling", "nervous-system"]
+      },
+      {
+        "id": "buddhist",
+        "title": "Buddhist-Curious",
+        "subtitle": "Contemplative • Seeking",
+        "description": "Approach through contemplative practice, the noble truths, and the cultivation of wisdom, compassion, and direct experiential knowledge.",
+        "tags": ["buddhism", "contemplative", "dharma", "wisdom", "practice"]
+      }
+    ]
+  },
+  "projects": {
+    "title": "Things I'm building",
+    "subtitle": "Tools, stories, and research projects that explore the intersection of technology, community, and contemplative practice."
+  },
+  "writing": {
+    "title": "Recent Writing",
+    "subtitle": "Essays exploring the intersection of technology, community, and contemplative practice. Thoughts on building bridges between different ways of knowing."
+  },
+  "support": {
+    "title": "If this work helps,",
+    "highlight": "help it help more people",
+    "subtitle": "Your support—whether through sharing, gratitude, resources, or connection—enables this work to reach and serve more communities.",
+    "closing": {
+      "title": "Building in the open",
+      "text": "This work happens in community. Whether you're here to learn, contribute, or simply witness the process—you're part of creating something meaningful together."
+    }
+  },
+  "physics": {
+    "dharmaWheel": {
+      "baseSpeed": 0.5,
+      "avoidanceDistance": 120,
+      "avoidanceStrength": 0.8,
+      "wanderStrength": 0.3,
+      "boundaryPadding": 50,
+      "opacity": 0.25,
+      "size": 80
+    }
+  },
+  "lensMapping": {
+    "lw-math": {
+      "projectOrder": ["lexion", "mapping-tpot", "customtales"],
+      "writingTags": ["rationality", "systems", "models"],
+      "emphasize": "systematic approaches and rational frameworks"
+    },
+    "engineer": {
+      "projectOrder": ["lexion", "customtales", "mapping-tpot"],
+      "writingTags": ["tools", "implementation", "building"],
+      "emphasize": "practical applications and working systems"
+    },
+    "embodied": {
+      "projectOrder": ["customtales", "lexion", "mapping-tpot"],
+      "writingTags": ["embodied", "somatic", "practice"],
+      "emphasize": "felt experience and embodied wisdom"
+    },
+    "buddhist": {
+      "projectOrder": ["customtales", "mapping-tpot", "lexion"],
+      "writingTags": ["buddhism", "contemplative", "dharma"],
+      "emphasize": "contemplative practice and wisdom cultivation"
+    }
+  }
+}

@@ -30,15 +30,22 @@ interface UseWanderingPhysicsProps {
 export function useWanderingPhysics({
   mousePosition,
   wheelSize,
-  baseSpeed = 0.3,
+  baseSpeed = 0.5,
   avoidanceDistance = 120,
   avoidanceStrength = 0.8,
-  wanderStrength = 0.1,
+  wanderStrength = 0.3,
   boundaryPadding = 50
 }: UseWanderingPhysicsProps): Position {
-  const [position, setPosition] = useState<Position>({ x: 300, y: 300 })
-  const velocityRef = useRef<Velocity>({ x: baseSpeed, y: 0 })
-  const lastWanderTime = useRef<number>(0)
+  const [position, setPosition] = useState<Position>({
+    x: Math.random() * (window?.innerWidth || 800),
+    y: Math.random() * (window?.innerHeight || 600)
+  })
+  const velocityRef = useRef<Velocity>({
+    x: (Math.random() - 0.5) * baseSpeed * 2,
+    y: (Math.random() - 0.5) * baseSpeed * 2
+  })
+  const driftAngleRef = useRef<number>(Math.random() * Math.PI * 2)
+  const lastDriftUpdate = useRef<number>(0)
   const animationRef = useRef<number>()
 
   useEffect(() => {
@@ -59,22 +66,40 @@ export function useWanderingPhysics({
       let vx = velocityRef.current.x
       let vy = velocityRef.current.y
 
-      // Mouse avoidance force
+      // Brownian motion components
+      // 1. Drift term (persistent directional bias)
+      if (timestamp - lastDriftUpdate.current > 8000 + Math.random() * 4000) {
+        // Update drift direction every 8-12 seconds
+        driftAngleRef.current += (Math.random() - 0.5) * Math.PI * 0.5 // ±45 degree changes
+        lastDriftUpdate.current = timestamp
+      }
+
+      const driftForce = baseSpeed * 0.3 // 30% of base speed as drift
+      const driftX = Math.cos(driftAngleRef.current) * driftForce
+      const driftY = Math.sin(driftAngleRef.current) * driftForce
+
+      // 2. Variance term (random diffusion)
+      const varianceStrength = wanderStrength
+      const brownianX = (Math.random() - 0.5) * varianceStrength
+      const brownianY = (Math.random() - 0.5) * varianceStrength
+
+      // Apply Brownian motion
+      vx += driftX + brownianX
+      vy += driftY + brownianY
+
+      // Mouse avoidance force (stronger and more immediate)
       if (distanceToMouse < avoidanceDistance && distanceToMouse > 0) {
-        const avoidanceForce = avoidanceStrength * (1 - distanceToMouse / avoidanceDistance)
+        const avoidanceForce = avoidanceStrength * Math.pow(1 - distanceToMouse / avoidanceDistance, 2)
         const normalizedX = dx / distanceToMouse
         const normalizedY = dy / distanceToMouse
 
         vx += normalizedX * avoidanceForce
         vy += normalizedY * avoidanceForce
-      }
 
-      // Random wandering (every 3-5 seconds)
-      if (timestamp - lastWanderTime.current > 3000 + Math.random() * 2000) {
-        const wanderAngle = Math.random() * Math.PI * 2
-        vx += Math.cos(wanderAngle) * wanderStrength
-        vy += Math.sin(wanderAngle) * wanderStrength
-        lastWanderTime.current = timestamp
+        // When avoiding, add some random deflection for more natural movement
+        const randomDeflection = 0.2
+        vx += (Math.random() - 0.5) * randomDeflection
+        vy += (Math.random() - 0.5) * randomDeflection
       }
 
       // Boundary avoidance (gentle curves away from edges)

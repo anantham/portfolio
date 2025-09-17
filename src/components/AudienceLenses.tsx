@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Brain, Code, Heart, Flower } from 'lucide-react'
-
-type Lens = 'lw-math' | 'engineer' | 'embodied' | 'buddhist'
+import { content, type LensId } from '@/lib/content'
+import { useLens } from '@/contexts/LensContext'
 
 interface LensData {
-  id: Lens
+  id: LensId
   title: string
   subtitle: string
   description: string
@@ -16,48 +15,41 @@ interface LensData {
   gradient: string
 }
 
-const lenses: LensData[] = [
-  {
-    id: 'lw-math',
-    title: 'LW/Math',
-    subtitle: 'Rationalist • Systematic',
-    description: 'Explore through the lens of rational thought, mathematical models, and systematic approaches to understanding culture and human coordination.',
-    icon: Brain,
+const iconMap = {
+  'lw-math': Brain,
+  'engineer': Code,
+  'embodied': Heart,
+  'buddhist': Flower
+}
+
+const styleMap = {
+  'lw-math': {
     color: 'text-blue-400',
     gradient: 'from-blue-500/20 to-cyan-500/20'
   },
-  {
-    id: 'engineer',
-    title: 'Applied Engineer',
-    subtitle: 'Builder • Pragmatic',
-    description: 'Focus on tools, implementations, and practical applications. See how ideas translate into working systems and real-world impact.',
-    icon: Code,
+  'engineer': {
     color: 'text-green-400',
     gradient: 'from-green-500/20 to-emerald-500/20'
   },
-  {
-    id: 'embodied',
-    title: 'Embodied',
-    subtitle: 'Somatic • Intuitive',
-    description: 'Engage through felt sense, embodied knowledge, and the wisdom that lives in our bodies and nervous systems.',
-    icon: Heart,
+  'embodied': {
     color: 'text-rose-400',
     gradient: 'from-rose-500/20 to-pink-500/20'
   },
-  {
-    id: 'buddhist',
-    title: 'Buddhist-Curious',
-    subtitle: 'Contemplative • Seeking',
-    description: 'Approach through contemplative practice, the noble truths, and the cultivation of wisdom, compassion, and direct experiential knowledge.',
-    icon: Flower,
+  'buddhist': {
     color: 'text-dharma-400',
     gradient: 'from-dharma-500/20 to-yellow-500/20'
   }
-]
+}
+
+const lenses: LensData[] = content.lenses.archetypes.map(archetype => ({
+  ...archetype,
+  icon: iconMap[archetype.id],
+  ...styleMap[archetype.id]
+}))
 
 export default function AudienceLenses() {
-  const [selectedLens, setSelectedLens] = useState<Lens | null>(null)
-  const [hoveredLens, setHoveredLens] = useState<Lens | null>(null)
+  const { selectedLens, setSelectedLens } = useLens()
+  const [hoveredLens, setHoveredLens] = useState<LensId | null>(null)
 
   return (
     <section className="py-20 px-4">
@@ -70,12 +62,15 @@ export default function AudienceLenses() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
-            How would you like to{' '}
-            <span className="text-dharma-400">meet me today?</span>
+            {content.lenses.title.split(' ').map((word, i, words) => {
+              if (word === 'today?') {
+                return <span key={i} className="text-dharma-400">{word}</span>
+              }
+              return word + (i < words.length - 1 ? ' ' : '')
+            })}
           </h2>
           <p className="text-xl text-zen-300 max-w-3xl mx-auto">
-            Choose a lens that resonates with you. Each perspective offers a different way
-            to explore my work, writing, and the bridges I'm building between communities.
+            {content.lenses.subtitle}
           </p>
         </motion.div>
 
@@ -153,27 +148,17 @@ export default function AudienceLenses() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mt-12 text-center"
+            className="mt-12"
           >
-            <div className="glass-card p-8 rounded-2xl bg-gradient-to-r from-dharma-500/10 to-zen-600/10 border border-dharma-500/20">
-              <h3 className="text-2xl font-light text-zen-50 mb-4">
-                Perfect! You've chosen the{' '}
-                <span className="text-dharma-400 font-medium">
-                  {lenses.find(l => l.id === selectedLens)?.title}
-                </span>{' '}
-                lens.
-              </h3>
-              <p className="text-zen-300 mb-6">
-                The site will now adapt to show you content and perspectives that resonate
-                with this approach. You can change your lens anytime.
-              </p>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="glass-card px-8 py-3 rounded-full text-dharma-400 border border-dharma-500/30 hover:border-dharma-400/50 transition-all duration-300"
-              >
-                Continue with {lenses.find(l => l.id === selectedLens)?.title} lens
-              </motion.button>
+            <div className="glass-card p-6 rounded-2xl bg-gradient-to-r from-dharma-500/10 to-zen-600/10 border border-dharma-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-dharma-400 animate-pulse"></div>
+                <span className="text-zen-300 text-sm">
+                  Lens selected: <span className="text-dharma-400 font-medium">
+                    {lenses.find(l => l.id === selectedLens)?.title}
+                  </span>
+                </span>
+              </div>
             </div>
           </motion.div>
         )}

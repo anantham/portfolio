@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { useMousePosition } from '@/hooks/useMousePosition'
 import { useWanderingPhysics } from '@/hooks/useWanderingPhysics'
+import { getPhysicsConfig } from '@/lib/content'
 
 interface WanderingDharmaWheelProps {
   size?: number
@@ -12,16 +13,25 @@ interface WanderingDharmaWheelProps {
 }
 
 export default function WanderingDharmaWheel({
-  size = 80,
-  opacity = 0.25,
-  baseSpeed = 0.3,
+  size,
+  opacity,
+  baseSpeed,
   disabled = false
 }: WanderingDharmaWheelProps) {
+  const config = getPhysicsConfig()
+  const wheelSize = size ?? config.size
+  const wheelOpacity = opacity ?? config.opacity
+  const wheelSpeed = baseSpeed ?? config.baseSpeed
+
   const mousePosition = useMousePosition()
   const position = useWanderingPhysics({
     mousePosition,
-    wheelSize: size,
-    baseSpeed: disabled ? 0 : baseSpeed
+    wheelSize,
+    baseSpeed: disabled ? 0 : wheelSpeed,
+    avoidanceDistance: config.avoidanceDistance,
+    avoidanceStrength: config.avoidanceStrength,
+    wanderStrength: config.wanderStrength,
+    boundaryPadding: config.boundaryPadding
   })
 
   // Respect reduced motion preference
@@ -32,14 +42,14 @@ export default function WanderingDharmaWheel({
     <motion.div
       className="fixed pointer-events-none select-none"
       style={{
-        left: position.x - size / 2,
-        top: position.y - size / 2,
+        left: position.x - wheelSize / 2,
+        top: position.y - wheelSize / 2,
         zIndex: -1,
-        opacity: prefersReducedMotion ? 0.1 : opacity
+        opacity: prefersReducedMotion ? 0.1 : wheelOpacity
       }}
       animate={{
-        left: position.x - size / 2,
-        top: position.y - size / 2,
+        left: position.x - wheelSize / 2,
+        top: position.y - wheelSize / 2,
       }}
       transition={{
         type: "tween",
@@ -59,8 +69,8 @@ export default function WanderingDharmaWheel({
         className="dharma-wheel"
       >
         <svg
-          width={size}
-          height={size}
+          width={wheelSize}
+          height={wheelSize}
           viewBox="0 0 200 200"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"

@@ -1,30 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ExternalLink, Clock, Tag, ArrowRight, BookOpen } from 'lucide-react'
-import { SubstackPost, fetchSubstackPosts, formatDate, getTimeAgo, truncateText } from '@/lib/substack'
+import { content, getWritingForLens, formatDate, getTimeAgo, type WritingPost } from '@/lib/content'
+import { useLens } from '@/contexts/LensContext'
 import { siteConfig, hasLink } from '@/lib/config'
 
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength).trim() + '...'
+}
+
 export default function WritingSection() {
-  const [posts, setPosts] = useState<SubstackPost[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedPost, setSelectedPost] = useState<SubstackPost | null>(null)
+  const { selectedLens } = useLens()
 
-  useEffect(() => {
-    const loadPosts = async () => {
-      try {
-        const fetchedPosts = await fetchSubstackPosts()
-        setPosts(fetchedPosts)
-      } catch (error) {
-        console.error('Error fetching posts:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadPosts()
-  }, [])
+  // Get posts filtered and sorted by lens
+  const posts = getWritingForLens(selectedLens, 5)
 
   if (!hasLink(siteConfig.social.substack)) {
     return null
@@ -41,12 +32,15 @@ export default function WritingSection() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
-            Recent{' '}
-            <span className="text-dharma-400">Writing</span>
+            {content.writing.title.split(' ').map((word, i, words) => {
+              if (word === 'Writing') {
+                return <span key={i} className="text-dharma-400">{word}</span>
+              }
+              return word + (i < words.length - 1 ? ' ' : '')
+            })}
           </h2>
           <p className="text-xl text-zen-300 max-w-3xl mx-auto mb-8">
-            Essays exploring the intersection of technology, community, and contemplative practice.
-            Thoughts on building bridges between different ways of knowing.
+            {content.writing.subtitle}
           </p>
 
           {hasLink(siteConfig.social.substack) && (
@@ -65,18 +59,7 @@ export default function WritingSection() {
           )}
         </motion.div>
 
-        {loading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="glass-card p-6 rounded-2xl animate-pulse">
-                <div className="h-4 bg-zen-700 rounded mb-4"></div>
-                <div className="h-3 bg-zen-800 rounded mb-2"></div>
-                <div className="h-3 bg-zen-800 rounded mb-4"></div>
-                <div className="h-2 bg-zen-800 rounded"></div>
-              </div>
-            ))}
-          </div>
-        ) : (
+        {posts.length > 0 ? (
           <div className="grid gap-8">
             {/* Featured post */}
             {posts.length > 0 && (
@@ -126,7 +109,7 @@ export default function WritingSection() {
                       </div>
 
                       <motion.a
-                        href={posts[0].link}
+                        href={`${siteConfig.social.substack}/p/${posts[0].id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         whileHover={{ scale: 1.02 }}
@@ -165,7 +148,7 @@ export default function WritingSection() {
                     viewport={{ once: true }}
                   >
                     <motion.a
-                      href={post.link}
+                      href={`${siteConfig.social.substack}/p/${post.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       whileHover={{ scale: 1.02, y: -5 }}
@@ -216,9 +199,7 @@ export default function WritingSection() {
               </div>
             )}
           </div>
-        )}
-
-        {posts.length === 0 && !loading && (
+        ) : (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
