@@ -12,13 +12,15 @@ interface LensContextType {
 const LensContext = createContext<LensContextType | undefined>(undefined)
 
 export function LensProvider({ children }: { children: ReactNode }) {
-  const [selectedLens, setSelectedLensState] = useState<LensId | null>(null)
+  const [selectedLens, setSelectedLensState] = useState<LensId | null>('engineer')
 
   // Load lens from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('selected_lens')
     if (saved && ['lw-math', 'engineer', 'embodied', 'buddhist'].includes(saved)) {
       setSelectedLensState(saved as LensId)
+    } else {
+      setSelectedLensState('engineer')
     }
   }, [])
 

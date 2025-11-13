@@ -91,13 +91,13 @@ export default function WritingSection() {
                       </p>
 
                       <div className="flex flex-wrap items-center gap-4 mb-6">
-                        {posts[0].categories && posts[0].categories.slice(0, 3).map(category => (
+                        {posts[0].tags && posts[0].tags.slice(0, 3).map(tag => (
                           <span
-                            key={category}
+                            key={tag}
                             className="flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-zen-800/50 text-zen-300"
                           >
                             <Tag size={10} />
-                            {category}
+                            {tag}
                           </span>
                         ))}
                         {posts[0].readTime && (
@@ -141,7 +141,7 @@ export default function WritingSection() {
               <div className="grid md:grid-cols-2 gap-6">
                 {posts.slice(1).map((post, index) => (
                   <motion.div
-                    key={post.guid}
+                    key={post.id}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: index * 0.1 }}
@@ -178,12 +178,12 @@ export default function WritingSection() {
                         </p>
 
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {post.categories && post.categories.slice(0, 2).map(category => (
+                          {post.tags && post.tags.slice(0, 2).map(tag => (
                             <span
-                              key={category}
+                              key={tag}
                               className="px-2 py-1 rounded-full text-xs bg-zen-800/50 text-zen-400"
                             >
-                              {category}
+                              {tag}
                             </span>
                           ))}
                         </div>

@@ -98,10 +98,16 @@ export default function DharmaWheel({ size = 200, className = '' }: DharmaWheelP
             )
           })}
 
-          {/* Three jewels in the center */}
-          <circle cx="95" cy="95" r="3" fill="#f59e0b" opacity="0.8" />
-          <circle cx="105" cy="95" r="3" fill="#f59e0b" opacity="0.8" />
-          <circle cx="100" cy="108" r="3" fill="#f59e0b" opacity="0.8" />
+          {/* Three jewels in the center - arranged symmetrically */}
+          {Array.from({ length: 3 }, (_, i) => {
+            const angle = (i * 120 - 90) * (Math.PI / 180) // Start from top, evenly spaced
+            const radius = 8 // Distance from center
+            const x = 100 + Math.cos(angle) * radius
+            const y = 100 + Math.sin(angle) * radius
+            return (
+              <circle key={i} cx={x} cy={y} r="3" fill="#f59e0b" opacity="0.8" />
+            )
+          })}
 
           {/* Gradients */}
           <defs>

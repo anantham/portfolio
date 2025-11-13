@@ -59,13 +59,19 @@ export interface SiteContent {
   }
   physics: {
     dharmaWheel: {
-      baseSpeed: number
-      avoidanceDistance: number
-      avoidanceStrength: number
-      wanderStrength: number
-      boundaryPadding: number
-      opacity: number
-      size: number
+      visual: {
+        size: number
+        opacity: number
+      }
+      defaultStrategy: string
+      strategies: Record<string, {
+        type: string
+        parameters: Record<string, unknown>
+      }>
+      lensProfiles: Record<LensId, {
+        strategy?: string
+        parameters?: Record<string, unknown>
+      }>
     }
   }
   lensMapping: Record<LensId, {
@@ -123,8 +129,37 @@ export function getProjectOrderForLens(lensId: LensId | null): string[] {
   return content.lensMapping[lensId]?.projectOrder || ['lexion', 'customtales', 'mapping-tpot']
 }
 
-export function getPhysicsConfig() {
-  return content.physics.dharmaWheel
+export interface WheelMotionProfile {
+  strategy: {
+    name: string
+    type: string
+  }
+  parameters: Record<string, unknown>
+  visual: {
+    size: number
+    opacity: number
+  }
+}
+
+export function getWheelMotionProfile(lensId: LensId | null): WheelMotionProfile {
+  const wheel = content.physics.dharmaWheel
+  const lensProfile = lensId ? wheel.lensProfiles?.[lensId] : undefined
+  const strategyName = lensProfile?.strategy ?? wheel.defaultStrategy
+  const strategyConfig = wheel.strategies[strategyName] ?? wheel.strategies[wheel.defaultStrategy]
+
+  const parameters = {
+    ...(strategyConfig?.parameters ?? {}),
+    ...(lensProfile?.parameters ?? {})
+  }
+
+  return {
+    strategy: {
+      name: strategyName,
+      type: strategyConfig?.type ?? 'zen'
+    },
+    parameters,
+    visual: wheel.visual
+  }
 }
 
 // Utility functions

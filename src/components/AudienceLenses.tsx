@@ -1,56 +1,194 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { Brain, Code, Heart, Flower } from 'lucide-react'
 import { content, type LensId } from '@/lib/content'
 import { useLens } from '@/contexts/LensContext'
+import { bioCards, defaultBioOrder, getRandomBioCard, bioLinks, type BioCard } from '@/lib/bio'
 
-interface LensData {
+interface LensMeta {
   id: LensId
   title: string
   subtitle: string
-  description: string
-  icon: React.ComponentType<any>
-  color: string
+  icon: React.ComponentType<{ size?: number | string }>
+  accent: string
   gradient: string
 }
 
-const iconMap = {
+const iconMap: Record<LensId, React.ComponentType<{ size?: number | string }>> = {
   'lw-math': Brain,
   'engineer': Code,
   'embodied': Heart,
   'buddhist': Flower
 }
 
-const styleMap = {
+const gradientMap: Record<LensId, { accent: string; gradient: string }> = {
   'lw-math': {
-    color: 'text-blue-400',
-    gradient: 'from-blue-500/20 to-cyan-500/20'
+    accent: 'text-blue-300',
+    gradient: 'from-blue-500/25 to-cyan-500/15'
   },
   'engineer': {
-    color: 'text-green-400',
-    gradient: 'from-green-500/20 to-emerald-500/20'
+    accent: 'text-emerald-300',
+    gradient: 'from-emerald-500/25 to-green-500/15'
   },
   'embodied': {
-    color: 'text-rose-400',
-    gradient: 'from-rose-500/20 to-pink-500/20'
+    accent: 'text-rose-300',
+    gradient: 'from-rose-500/25 to-pink-500/15'
   },
   'buddhist': {
-    color: 'text-dharma-400',
-    gradient: 'from-dharma-500/20 to-yellow-500/20'
+    accent: 'text-dharma-300',
+    gradient: 'from-dharma-500/25 to-amber-500/15'
   }
 }
 
-const lenses: LensData[] = content.lenses.archetypes.map(archetype => ({
-  ...archetype,
-  icon: iconMap[archetype.id],
-  ...styleMap[archetype.id]
+interface DisplayCard {
+  lens: LensId
+  card: BioCard
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
+const escapeRegExp = (value: string) => {
+  const specials = new Set(['\\', '^', '$', '*', '+', '?', '.', '(', ')', '|', '{', '}', '[', ']'])
+  let escaped = ''
+  for (const char of value) {
+    escaped += specials.has(char) ? `\\${char}` : char
+  }
+  return escaped
+}
+
+const linkedPhrases = bioLinks.map(link => ({
+  phrase: link.phrase.trim(),
+  href: link.href
 }))
+
+const renderSummary = (text: string): ReactNode => {
+  let nodes: ReactNode[] = [text]
+  let keyIndex = 0
+
+  linkedPhrases.forEach(link => {
+    const phrase = link.phrase
+    if (!phrase) return
+    const regex = new RegExp(escapeRegExp(phrase), 'g')
+
+    nodes = nodes.flatMap(node => {
+      if (typeof node !== 'string') return [node]
+      if (!regex.test(node)) {
+        regex.lastIndex = 0
+        return [node]
+      }
+
+      regex.lastIndex = 0
+      const parts = node.split(regex)
+      const segments: ReactNode[] = []
+      parts.forEach((part, idx) => {
+        if (part) segments.push(part)
+        if (idx < parts.length - 1) {
+          const linkKey = `bio-link-${phrase}-${keyIndex++}`
+          segments.push(
+            <a
+              key={linkKey}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-dharma-300 underline-offset-4 hover:text-dharma-200 hover:underline"
+            >
+              {phrase}
+            </a>
+          )
+        }
+      })
+      return segments
+    })
+  })
+
+  return nodes.map((node, idx) => (typeof node === 'string' ? <span key={`bio-frag-${idx}`}>{node}</span> : node))
+}
 
 export default function AudienceLenses() {
   const { selectedLens, setSelectedLens } = useLens()
-  const [hoveredLens, setHoveredLens] = useState<LensId | null>(null)
+  const [viewMode, setViewMode] = useState<'mix' | 'uniform'>('mix')
+  const [uniformLens, setUniformLens] = useState<LensId | null>(null)
+  const initialMixCards = useMemo(() => (
+    defaultBioOrder.map(lens => ({
+      lens,
+      card: bioCards[lens][0]
+    }))
+  ), [])
+
+  const [mixCards, setMixCards] = useState<DisplayCard[]>(initialMixCards)
+
+  const lensMap = useMemo<Record<LensId, LensMeta>>(() => {
+    return content.lenses.archetypes.reduce((acc, archetype) => {
+      acc[archetype.id] = {
+        id: archetype.id,
+        title: archetype.title,
+        subtitle: archetype.subtitle,
+        icon: iconMap[archetype.id],
+        ...gradientMap[archetype.id]
+      }
+      return acc
+    }, {} as Record<LensId, LensMeta>)
+  }, [])
+
+  const regenerateMix = useCallback(() => {
+    setMixCards(
+      shuffle(defaultBioOrder).map(lens => ({
+        lens,
+        card: getRandomBioCard(lens)
+      }))
+    )
+  }, [])
+
+  useEffect(() => {
+    regenerateMix()
+  }, [regenerateMix])
+
+  useEffect(() => {
+    if (selectedLens && selectedLens !== 'engineer') {
+      setViewMode('uniform')
+      setUniformLens(selectedLens)
+    }
+  }, [selectedLens])
+
+  const activeLens: LensId = useMemo(() => {
+    if (viewMode === 'uniform') {
+      return uniformLens ?? selectedLens ?? 'engineer'
+    }
+    return selectedLens ?? 'engineer'
+  }, [selectedLens, uniformLens, viewMode])
+
+  const handleCardClick = (lens: LensId) => {
+    if (viewMode === 'mix') {
+      setViewMode('uniform')
+      setUniformLens(lens)
+      setSelectedLens(lens)
+    } else {
+      if (uniformLens === lens) {
+        setViewMode('mix')
+        setUniformLens(null)
+        setSelectedLens('engineer')
+        regenerateMix()
+      } else {
+        setUniformLens(lens)
+        setSelectedLens(lens)
+      }
+    }
+  }
+
+  const cardsToDisplay: DisplayCard[] = viewMode === 'uniform'
+    ? bioCards[activeLens].map(card => ({ lens: activeLens, card }))
+    : mixCards
 
   return (
     <section className="py-20 px-4">
@@ -63,106 +201,66 @@ export default function AudienceLenses() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
-            {content.lenses.title.split(' ').map((word, i, words) => {
-              if (word === 'today?') {
-                return <span key={i} className="text-dharma-400">{word}</span>
-              }
-              return word + (i < words.length - 1 ? ' ' : '')
-            })}
+            {content.lenses.title}
           </h2>
-          <p className="text-xl text-zen-300 max-w-3xl mx-auto">
+          <p className="text-lg text-zen-300 max-w-3xl mx-auto">
             {content.lenses.subtitle}
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {lenses.map((lens, index) => {
-            const Icon = lens.icon
-            const isSelected = selectedLens === lens.id
-            const isHovered = hoveredLens === lens.id
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          {cardsToDisplay.map(({ lens, card }, index) => {
+            const meta = lensMap[lens]
+            const Icon = meta.icon
+            const isActive = viewMode === 'uniform' && activeLens === lens
 
             return (
               <motion.div
-                key={lens.id}
-                initial={{ opacity: 0, y: 20 }}
+                key={`${lens}-${card.id}`}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
+                transition={{ duration: 0.6, delay: index * 0.08 }}
                 viewport={{ once: true }}
                 className="relative"
               >
-                <motion.div
-                  whileHover={{ scale: 1.02, y: -5 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setSelectedLens(isSelected ? null : lens.id)}
-                  onHoverStart={() => setHoveredLens(lens.id)}
-                  onHoverEnd={() => setHoveredLens(null)}
-                  className={`
-                    glass-card p-6 rounded-2xl cursor-pointer transition-all duration-300
-                    ${isSelected ? 'ring-2 ring-dharma-400/50' : ''}
-                    bg-gradient-to-br ${lens.gradient}
-                    border border-zen-700/50 hover:border-zen-600/70
-                  `}
+                <motion.button
+                  type="button"
+                  onClick={() => handleCardClick(lens)}
+                  whileHover={{ y: -8, scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className={`group flex h-full flex-col overflow-hidden rounded-3xl border border-zen-800/60 bg-zen-950/60 backdrop-blur focus:outline-none transition-all duration-500 ${isActive ? 'ring-2 ring-dharma-400/50 shadow-[0_0_28px_rgba(255,193,79,0.22)]' : 'hover:border-zen-600/50'}`}
                 >
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-dharma-500 rounded-full flex items-center justify-center"
-                    >
-                      <div className="w-2 h-2 bg-zen-900 rounded-full" />
-                    </motion.div>
-                  )}
+                  <div
+                    className={`relative w-full overflow-hidden bg-zen-950/40 aspect-[4/3]`}
+                  >
+                    <Image
+                      src={card.image}
+                      alt={card.title}
+                      fill
+                      className="object-contain"
+                      sizes="(min-width: 1280px) 45vw, (min-width: 768px) 50vw, 100vw"
+                    />
+                    <div className={`absolute inset-0 pointer-events-none bg-gradient-to-tr ${meta.gradient} opacity-40`} />
+                    <div className="absolute top-4 left-4">
+                      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full bg-zen-950/70 backdrop-blur ring-1 ring-zen-800/60 ${meta.accent}`}>
+                        <Icon size={18} />
+                      </span>
+                    </div>
+                  </div>
 
-                  <div className="flex flex-col items-center text-center">
-                    <motion.div
-                      animate={{
-                        scale: isHovered ? 1.1 : 1,
-                        rotate: isHovered ? 5 : 0
-                      }}
-                      transition={{ duration: 0.2 }}
-                      className={`p-4 rounded-xl bg-zen-800/50 mb-4 ${lens.color}`}
-                    >
-                      <Icon size={32} />
-                    </motion.div>
-
-                    <h3 className="text-xl font-medium text-zen-50 mb-2">
-                      {lens.title}
+                  <div className="flex-1 p-6">
+                    <h3 className="text-xl font-semibold text-zen-50 mb-3">
+                      {card.title}
                     </h3>
-
-                    <p className="text-sm text-zen-400 mb-4 font-medium">
-                      {lens.subtitle}
-                    </p>
-
-                    <p className="text-sm text-zen-300 leading-relaxed">
-                      {lens.description}
+                    <p className="text-sm text-zen-200 leading-relaxed">
+                      {renderSummary(card.summary)}
                     </p>
                   </div>
-                </motion.div>
+                </motion.button>
               </motion.div>
             )
           })}
         </div>
-
-        {selectedLens && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mt-12"
-          >
-            <div className="glass-card p-6 rounded-2xl bg-gradient-to-r from-dharma-500/10 to-zen-600/10 border border-dharma-500/20">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-dharma-400 animate-pulse"></div>
-                <span className="text-zen-300 text-sm">
-                  Lens selected: <span className="text-dharma-400 font-medium">
-                    {lenses.find(l => l.id === selectedLens)?.title}
-                  </span>
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </div>
     </section>
   )

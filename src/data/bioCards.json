@@ -1,0 +1,109 @@
+{
+  "defaultOrder": ["engineer", "lw-math", "embodied", "buddhist"],
+  "cards": {
+    "engineer": [
+      {
+        "id": "ai-alignment",
+        "title": "Alignment In Practice",
+        "summary": "I have experience working with the rationality and EA community for the past few years on addressing the risks that are emerging as our species starts building Artificial General Intelligence. You can find open projects that I am seeking collaborators for here. There is no point in worrying, focus on what actions you can take to make a difference!",
+        "image": "/images/bio/speaker-events.jpg"
+      },
+      {
+        "id": "ai-leverage",
+        "title": "Organizing for Acceleration",
+        "summary": "I helped organize the Live Machinery hackathon in Bangalore, and the workshop in Blackpool. I am currently a team lead for the Auto structures project at the AI Safety Camps cohort this year. I’d love to hear your thoughts about how we can leverage advances in AI to supercharge alignment research.",
+        "image": "/images/bio/explaining-sitting-in-oxford.jpg"
+      },
+      {
+        "id": "second-brain",
+        "title": "Second Brain Systems",
+        "summary": "I have taken classes on how to structure notes, optimize retrieval, integrate knowledge management systems. My Obsidian vault is my digital garden that I have build tools to view in VR, to manage via local AI models to automate workflows. Notion has also been a companion in my research work, keeping track of investments, hobbies, and travels. I started the Second Brain meetup group in Bangalore, so hit me up and we can meet up in person and share tips!",
+        "image": "/images/bio/audiophile.png"
+      },
+      {
+        "id": "academic-roots",
+        "title": "Academic Foundations",
+        "summary": "I did my Bachelor in Instrumentation and Control Engineering from the National Institute of Technology, Tiruchirappalli. There I learned about how physical parameters like viscosity and temperature can be turned into electrical parameters using sensors. How sensors leveraged natural laws and then the mathematics of control theory calculated how to intervene in a system and send signals that actuators used to turn into physical variables. During the summer I spent a semester at Stanford University studying Data Science and later got into the Indian Institute of Science Bangalore’s Computational Data Science Department for my PhD.",
+        "image": "/images/bio/summit-sunglasses.jpg"
+      }
+    ],
+    "lw-math": [
+      {
+        "id": "coordination-science",
+        "title": "Mathematics of Coordination",
+        "summary": "PhD in Computational Data Science at IISc Bangalore, applying mathematical frameworks to coordination problems and AI alignment. Background spans control theory (sensor-actuator feedback systems) to governance optimization (studied for Indian Civil Services to understand bureaucratic coordination mechanisms).",
+        "image": "/images/bio/explaining-sitting-in-oxford.jpg"
+      },
+      {
+        "id": "rationality-community",
+        "title": "Rationality Communities",
+        "summary": "Active in rationality and EA communities for several years, currently team lead for Auto Structures project at AI Safety Camps. Organized Live Machinery hackathon focusing on practical alignment research tooling. Approach prioritizes empirical validation over theoretical speculation—focus on what actions you can take to make a difference.",
+        "image": "/images/bio/speaker-events.jpg"
+      },
+      {
+        "id": "knowledge-infrastructure",
+        "title": "Knowledge Infrastructure",
+        "summary": "Built systematic knowledge management infrastructure: Obsidian vault with VR visualization for spatial reasoning, local LLM integration for automated retrieval, cross-platform workflow optimization. Started Second Brain meetup in Bangalore to systematize collective intelligence practices.",
+        "image": "/images/bio/audiophile.png"
+      },
+      {
+        "id": "contemplative-science",
+        "title": "Contemplative Research",
+        "summary": "Completed Goenka Vipassana retreat and currently in MAPLE AI fellowship (4+ hours daily meditation, monthly week-long isolation periods). Interested in bridging contemplative phenomenology with computational approaches to consciousness and alignment.",
+        "image": "/images/bio/monastic-robes.jpg"
+      }
+    ],
+    "embodied": [
+      {
+        "id": "mountain-training",
+        "title": "Mountains help me run cool",
+        "summary": "I spent more than a month training at the National Institute of Mountaineering and Adventure Sports (NIMAS). It was the last course of 2024 before it became too cold and dangerous to traverse the passes. Elites from the army, navy, and airforce were selected to join this course where skills like climbing up sheer faces of rock cliffs, and ice glaciers and rescuing people stuck in crevices were taught at 16500 feet above sea level. I stayed in army barracks on the border between China and India before going camping in tents. Other treks I enjoyed include Deoriatal Chandrashila, Kedar Tal, etc.",
+        "image": "/images/bio/mountain.jpg"
+      },
+      {
+        "id": "global-travel",
+        "title": "Travelling to diverse environments",
+        "summary": "Over my life, I have had the opportunity to see many parts of the world. I have gone on road trips around Ireland, all the way from Dublin to the Cliffs of Moher. I got to see the world's largest tree when I went camping at Sequoia National Park in California. Driving around the Lake District UK and other remote parts of the countryside remains my fond memory. Notable mentions include eating watermelons from Georgia, listening to Minami sing in Fukuoka, Japan, a road trip from the coolest freshwater Lake Michigan to Bentonville, Arkansas, the clean ocean off Tanzania, taking the ropeway to the Tian Tan Buddha in Hong Kong, sunrise after cross country skiing in Vermont and many more. I’d love to hear your suggestions for magical places around the world worth visiting.",
+        "image": "/images/bio/waterfall.jpg"
+      },
+      {
+        "id": "audiophile",
+        "title": "Music evokes Emotions",
+        "summary": "It was at Yodobashi, the largest electronics store in Japan that I first listened to SE846. Tears fell out of my eyes as I realized I had never really listened to my fav songs before. The clarity, high resolution, and fidelity of reproduction that In-Ear Monitors offer to me have left me a fan and an avid user for the last few years. I repaired my pair 3 times now and Shure has been a great company to work with. For my Bluetooth adapter, I use the B3 as my on-the-go solution. I am still trying to find Bluetooth speakers that are both portable and loud so would love recommendations!",
+        "image": "/images/bio/audiophile.png"
+      },
+      {
+        "id": "music-experiences",
+        "title": "Living Music is a special Qualia experienced as a group",
+        "summary": "Some of my best experiences in this life has been hearing TOOL play live in LA. I love their music so much. I have been fortunate to hear Jazz being played in Bangalore by indie artists that put their soul into the music. Jacob Collier visited my city and I had an amazing time listening to him. I grew up listening to Taylor Swift and love her songs. Instrumental music on the handpan or piano adaptations by animez are also some of my deep joys to experience.",
+        "image": "/images/bio/cold-plunge.jpg"
+      }
+    ],
+    "buddhist": [
+      {
+        "id": "goenka-practice",
+        "title": "Vipassana Practice",
+        "summary": "I finished a Goenka Vipassana retreat in India last year and was part of Jhorney’s initial trial runs. Currently I am fortunate enough to be awarded the AI fellowship from MAPLE from the start of 2025. Right now I am spending more than 4 hrs a day meditating and every month spending more than a week isolated from the internet, not communicating with anyone, and doing intense meditation for the whole Advance.",
+        "image": "/images/bio/monastic-robes.jpg"
+      },
+      {
+        "id": "sutra-conversations",
+        "title": "Sutta Conversations",
+        "summary": "If anyone wants to discuss what the appropriate translation or interpretation of the sutras are, lets jam in pali ;)",
+        "image": "/images/bio/monastic-robes.jpg"
+      },
+      {
+        "id": "tech-as-karma",
+        "title": "Alignment as Compassion",
+        "summary": "Currently working with AI alignment—how do we build systems that don't cause suffering? The First Noble Truth applies to our technological creations too. We're creating beings that will outlast us. What intentions are we encoding?",
+        "image": "/images/bio/monastic-robes.jpg"
+      },
+      {
+        "id": "pilgrimage",
+        "title": "Finding my Sangha",
+        "summary": "Travel has been pilgrimage by accident. Sitting with different sanghas, learning how the teachings translate across cultures. The essential questions remain: What is suffering? What causes it? Is there a path through?",
+        "image": "/images/bio/monastic-robes.jpg"
+      }
+    ]
+  }
+}

@@ -277,8 +277,8 @@ export default function SupportSection() {
               Building in the open
             </h3>
             <p className="text-zen-300 max-w-2xl mx-auto leading-relaxed">
-              This work happens in community. Whether you're here to learn, contribute,
-              or simply witness the process—you're part of creating something meaningful together.
+              This work happens in community. Whether you&apos;re here to learn, contribute,
+              or simply witness the process—you&apos;re part of creating something meaningful together.
             </p>
           </div>
         </motion.div>

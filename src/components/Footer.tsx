@@ -14,6 +14,7 @@ import {
   Clock
 } from 'lucide-react'
 import { siteConfig, hasLink } from '@/lib/config'
+import content from '@/data/content.json'
 
 interface SocialLink {
   name: string
@@ -108,15 +109,14 @@ export default function Footer() {
               viewport={{ once: true }}
             >
               <h3 className="text-2xl font-light text-zen-50 mb-4">
-                <span className="text-dharma-400">Aditya</span> Arpitha
+                <span className="text-dharma-400">{content.footer.name.split(' ')[0]}</span> {content.footer.name.split(' ')[1]}
               </h3>
               <p className="text-zen-300 leading-relaxed mb-6">
-                Building bridges between niche subcultures through tools, essays, and rituals.
-                Exploring the intersection of technology, community, and contemplative practice.
+                {content.footer.description}
               </p>
               <div className="flex items-center gap-2 text-sm text-zen-400">
                 <Heart size={16} className="text-dharma-500" />
-                <span>Built with care and intention</span>
+                <span>{content.footer.builtWith}</span>
               </div>
             </motion.div>
           </div>

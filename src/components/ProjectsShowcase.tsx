@@ -77,7 +77,7 @@ const projects: Project[] = [
 
 export default function ProjectsShowcase() {
   return (
-    <section className="py-20 px-4">
+    <section id="projects-section" className="py-20 px-4">
       <div className="container mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -87,7 +87,7 @@ export default function ProjectsShowcase() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
-            Things I'm{' '}
+            Things I&apos;m{' '}
             <span className="text-dharma-400">building</span>
           </h2>
           <p className="text-xl text-zen-300 max-w-3xl mx-auto">

@@ -23,7 +23,11 @@ export const metadata: Metadata = {
     title: 'Aditya Arpitha | Building Bridges to Niche Subcultures',
     description: 'A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.',
   },
-  viewport: 'width=device-width, initial-scale=1',
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
   themeColor: '#202124',
 }
 

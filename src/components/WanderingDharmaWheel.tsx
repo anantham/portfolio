@@ -1,9 +1,12 @@
 'use client'
 
+import { useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useMousePosition } from '@/hooks/useMousePosition'
-import { useWanderingPhysics } from '@/hooks/useWanderingPhysics'
-import { getPhysicsConfig } from '@/lib/content'
+import { useMotionStrategy } from '@/hooks/useMotionStrategy'
+import { getWheelMotionProfile } from '@/lib/content'
+import { useLens } from '@/contexts/LensContext'
+import DharmaWheel from '@/components/DharmaWheel'
 
 interface WanderingDharmaWheelProps {
   size?: number
@@ -18,169 +21,154 @@ export default function WanderingDharmaWheel({
   baseSpeed,
   disabled = false
 }: WanderingDharmaWheelProps) {
-  const config = getPhysicsConfig()
-  const wheelSize = size ?? config.size
-  const wheelOpacity = opacity ?? config.opacity
-  const wheelSpeed = baseSpeed ?? config.baseSpeed
+  const { selectedLens } = useLens()
+  const profile = useMemo(() => getWheelMotionProfile(selectedLens), [selectedLens])
+  const wheelSize = size ?? profile.visual.size
+  const wheelOpacity = opacity ?? profile.visual.opacity
+
+  const strategyConfig = useMemo(() => {
+    if (baseSpeed !== undefined) {
+      return { ...profile.parameters, baseSpeed }
+    }
+    return profile.parameters
+  }, [profile.parameters, baseSpeed])
 
   const mousePosition = useMousePosition()
-  const position = useWanderingPhysics({
-    mousePosition,
-    wheelSize,
-    baseSpeed: disabled ? 0 : wheelSpeed,
-    avoidanceDistance: config.avoidanceDistance,
-    avoidanceStrength: config.avoidanceStrength,
-    wanderStrength: config.wanderStrength,
-    driftStrength: config.driftStrength,
-    boundaryPadding: config.boundaryPadding,
-    enableSpeedNormalization: config.enableSpeedNormalization,
-    driftUpdateInterval: config.driftUpdateInterval,
-    smoothing: config.smoothing
+  const { position } = useMotionStrategy({
+    strategyType: profile.strategy.type,
+    config: strategyConfig,
+    mousePosition: disabled ? null : mousePosition,
+    disabled
   })
+
+  const clampedPosition = useMemo(() => {
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : wheelSize
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : wheelSize
+    const pad = wheelSize / 2
+    return {
+      x: Math.max(pad, Math.min(viewportWidth - pad, position.x)),
+      y: Math.max(pad, Math.min(viewportHeight - pad, position.y))
+    }
+  }, [position.x, position.y, wheelSize])
+
+  const clampedX = clampedPosition.x
+  const clampedY = clampedPosition.y
+
+  const traceCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const samplesRef = useRef<Array<{ x: number; y: number; time: number }>>([])
+
+  useEffect(() => {
+    const canvas = traceCanvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const resize = () => {
+      const width = window.innerWidth
+      const height = window.innerHeight
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = width * dpr
+      canvas.height = height * dpr
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.scale(dpr, dpr)
+      ctx.clearRect(0, 0, width, height)
+      samplesRef.current = []
+    }
+
+    resize()
+    window.addEventListener('resize', resize)
+    return () => {
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = traceCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const now = performance.now() / 1000
+    const fadeWindow = 20
+    samplesRef.current.push({ x: clampedX, y: clampedY, time: now })
+    samplesRef.current = samplesRef.current.filter(sample => now - sample.time <= fadeWindow)
+
+    const dpr = window.devicePixelRatio || 1
+    const width = canvas.width / dpr
+    const height = canvas.height / dpr
+
+    ctx.clearRect(0, 0, width, height)
+
+    const samples = samplesRef.current
+    if (samples.length < 2) return
+
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    for (let i = 1; i < samples.length; i++) {
+      const prev = samples[i - 1]
+      const curr = samples[i]
+      const age = now - curr.time
+      const alpha = Math.max(0, 1 - age / fadeWindow)
+      ctx.beginPath()
+      ctx.moveTo(prev.x, prev.y)
+      ctx.lineTo(curr.x, curr.y)
+      ctx.strokeStyle = `rgba(248, 196, 113, ${alpha})`
+      ctx.stroke()
+    }
+  }, [clampedX, clampedY])
+
+  useEffect(() => {
+    const canvas = traceCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    samplesRef.current = []
+  }, [profile.strategy.name, disabled])
 
   // Respect reduced motion preference
   const prefersReducedMotion = typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   return (
-    <motion.div
-      className="fixed pointer-events-none select-none"
-      style={{
-        left: position.x - wheelSize / 2,
-        top: position.y - wheelSize / 2,
-        zIndex: -1,
-        opacity: prefersReducedMotion ? 0.1 : wheelOpacity
-      }}
-      animate={{
-        left: position.x - wheelSize / 2,
-        top: position.y - wheelSize / 2,
-      }}
-      transition={{
-        type: "tween",
-        ease: "linear",
-        duration: 0.1
-      }}
-    >
+    <>
+      <canvas
+        ref={traceCanvasRef}
+        className="fixed top-0 left-0 pointer-events-none select-none"
+        style={{ zIndex: 0 }}
+      />
       <motion.div
+        className="fixed pointer-events-none select-none"
+        style={{
+          left: clampedX - wheelSize / 2,
+          top: clampedY - wheelSize / 2,
+          zIndex: 1,
+          opacity: prefersReducedMotion ? 0.1 : wheelOpacity
+        }}
         animate={{
-          rotate: prefersReducedMotion || disabled ? 0 : 360
+          left: clampedX - wheelSize / 2,
+          top: clampedY - wheelSize / 2
         }}
         transition={{
-          duration: 60,
-          repeat: Infinity,
-          ease: "linear"
+          type: "tween",
+          ease: "linear",
+          duration: 0.1
         }}
-        className="dharma-wheel"
       >
-        <svg
-          width={wheelSize}
-          height={wheelSize}
-          viewBox="0 0 200 200"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="drop-shadow-sm"
-        >
-          {/* Outer rim */}
-          <circle
-            cx="100"
-            cy="100"
-            r="95"
-            stroke="url(#wanderingDharmaGradient)"
-            strokeWidth="2"
-            fill="none"
-          />
+        <DharmaWheel
+          size={wheelSize}
+          className={`transition-opacity duration-500 ${disabled ? 'opacity-20' : ''}`}
+        />
 
-          {/* Inner rim */}
-          <circle
-            cx="100"
-            cy="100"
-            r="75"
-            stroke="url(#wanderingDharmaGradient)"
-            strokeWidth="1.5"
-            fill="none"
-            opacity="0.8"
-          />
-
-          {/* Hub */}
-          <circle
-            cx="100"
-            cy="100"
-            r="20"
-            fill="url(#wanderingHubGradient)"
-            stroke="url(#wanderingDharmaGradient)"
-            strokeWidth="1"
-          />
-
-          {/* Eight spokes representing the Noble Eightfold Path */}
-          {Array.from({ length: 8 }, (_, i) => {
-            const angle = (i * 45) * (Math.PI / 180)
-            const x1 = 100 + Math.cos(angle) * 20
-            const y1 = 100 + Math.sin(angle) * 20
-            const x2 = 100 + Math.cos(angle) * 75
-            const y2 = 100 + Math.sin(angle) * 75
-
-            return (
-              <line
-                key={i}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                stroke="url(#wanderingSpokeGradient)"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            )
-          })}
-
-          {/* Dots on the rim representing interconnectedness */}
-          {Array.from({ length: 24 }, (_, i) => {
-            const angle = (i * 15) * (Math.PI / 180)
-            const x = 100 + Math.cos(angle) * 85
-            const y = 100 + Math.sin(angle) * 85
-
-            return (
-              <circle
-                key={i}
-                cx={x}
-                cy={y}
-                r="2"
-                fill="url(#wanderingDharmaGradient)"
-                opacity="0.6"
-              />
-            )
-          })}
-
-          {/* Three jewels in the center */}
-          <circle cx="95" cy="95" r="3" fill="#f59e0b" opacity="0.6" />
-          <circle cx="105" cy="95" r="3" fill="#f59e0b" opacity="0.6" />
-          <circle cx="100" cy="108" r="3" fill="#f59e0b" opacity="0.6" />
-
-          {/* Gradients - slightly more subtle for background wheel */}
-          <defs>
-            <linearGradient id="wanderingDharmaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.7" />
-              <stop offset="50%" stopColor="#d97706" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#92400e" stopOpacity="0.3" />
-            </linearGradient>
-
-            <radialGradient id="wanderingHubGradient" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.2" />
-              <stop offset="100%" stopColor="#92400e" stopOpacity="0.05" />
-            </radialGradient>
-
-            <linearGradient id="wanderingSpokeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#d97706" stopOpacity="0.3" />
-            </linearGradient>
-          </defs>
-        </svg>
-      </motion.div>
-
-      {/* Optional: Very subtle trail effect */}
-      <motion.div
-        className="absolute inset-0 rounded-full"
-        style={{
+        {/* Optional: Very subtle trail effect */}
+        <motion.div
+          className="absolute inset-0 rounded-full"
+          style={{
           background: `radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%)`,
           filter: 'blur(2px)'
         }}
@@ -191,9 +179,11 @@ export default function WanderingDharmaWheel({
         transition={{
           duration: 4,
           repeat: Infinity,
-          ease: "easeInOut"
-        }}
+        ease: "easeInOut"
+      }}
       />
+
     </motion.div>
+    </>
   )
 }

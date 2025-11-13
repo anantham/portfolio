@@ -1,11 +1,17 @@
 {
   "site": {
-    "tagline": "A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.",
-    "description": "Building bridges between niche subcultures through tools, essays, and contemplative practice.",
+    "name": "Aditya Arpitha Prasad",
+    "tagline": "My name is Aditya and this website is my attempt to make myself legible",
+    "description": "My name Aditya stands for the Sun",
     "quote": {
-      "text": "Notice the music playing at the scale of days or weeks, but invite yourself to zoom out and consider the periodic rhythms that exist at the scale of years or decades.",
+      "text": "Walking the Middle Way",
       "attribution": null
     }
+  },
+  "footer": {
+    "name": "Aditya Arpitha Prasad",
+    "description": "Building bridges between niche subcultures through tools, essays, and rituals. Exploring the intersection of technology, community, and contemplative practice.",
+    "builtWith": "Built with care and intention, aiming for Integrity"
   },
   "hero": {
     "title": {
@@ -24,8 +30,8 @@
     }
   },
   "lenses": {
-    "title": "How would you like to meet me today?",
-    "subtitle": "Choose a lens that resonates with you. Each perspective offers a different way to explore my work, writing, and the bridges I'm building between communities.",
+    "title": "Four ways to meet me",
+    "subtitle": "We begin in applied engineer mode. Tap any story to lock in that perspective; tap it again to reopen the full spread of archetypes.",
     "archetypes": [
       {
         "id": "lw-math",
@@ -68,27 +74,114 @@
   "support": {
     "title": "If this work helps,",
     "highlight": "help it help more people",
-    "subtitle": "Your support—whether through sharing, gratitude, resources, or connection—enables this work to reach and serve more communities.",
+    "subtitle": "Your support whether through sharing, gratitude, resources, or connection—enables this work to reach and serve more communities.",
     "closing": {
       "title": "Building in the open",
       "text": "This work happens in community. Whether you're here to learn, contribute, or simply witness the process—you're part of creating something meaningful together."
     }
   },
-  "physics": {
-    "dharmaWheel": {
-      "baseSpeed": 6.0,
-      "avoidanceDistance": 120,
-      "avoidanceStrength": 0.8,
-      "wanderStrength": 0.05,
-      "driftStrength": 2.0,
-      "boundaryPadding": 0,
-      "opacity": 0.25,
-      "size": 80,
-      "enableSpeedNormalization": false,
-      "driftUpdateInterval": 60000,
-      "smoothing": 0.5
-    }
-  },
+      "physics": {
+        "dharmaWheel": {
+      "visual": {
+        "size": 64,
+        "opacity": 0.4
+      },
+          "defaultStrategy": "engineer-zen",
+          "strategies": {
+            "engineer-zen": {
+              "type": "zen",
+              "parameters": {
+                "baseSpeed": 8.4,
+                "maxTurnRate": 1.2,
+                "ema": 0.2,
+                "pad": 64,
+                "wallK": 30000,
+                "tau": 8,
+                "sigma": 0.8,
+                "breatheAmp": 0.08,
+                "breatheHz": 0.08,
+                "pauseProbability": 0.008,
+                "pauseDuration": { "min": 0.4, "max": 0.75 },
+                "flowStrength": 10,
+                "flowScale": 0.0012,
+                "flowTimeScale": 0.6,
+                "mouseAvoidanceRadius": 90,
+                "mouseAvoidanceStrength": 16,
+                "mouseCollisionRadius": 140,
+                "mouseCollisionDamping": 0.6
+              }
+            },
+            "lw-flow": {
+              "type": "flow-field",
+              "parameters": {
+                "baseSpeed": 72,
+                "curlStrength": 28,
+                "noiseScale": 0.002,
+                "noiseTimeScale": 0.5,
+                "smoothing": 0.15,
+                "pad": 56,
+                "wallK": 24000,
+                "mouseAvoidanceRadius": 80,
+                "mouseAvoidanceStrength": 18,
+                "mouseCollisionRadius": 130,
+                "mouseCollisionDamping": 0.6
+              }
+            },
+            "embodied-zen": {
+              "type": "zen",
+              "parameters": {
+                "baseSpeed": 48,
+                "maxTurnRate": 0.35,
+                "ema": 0.1,
+                "pad": 72,
+                "wallK": 26000,
+                "tau": 30,
+                "sigma": 0.24,
+                "breatheAmp": 0.1,
+                "breatheHz": 0.06,
+                "pauseProbability": 0.012,
+                "pauseDuration": { "min": 0.5, "max": 0.9 },
+                "flowStrength": 6,
+                "flowScale": 0.001,
+                "flowTimeScale": 0.4,
+                "mouseAvoidanceRadius": 110,
+                "mouseAvoidanceStrength": 18,
+                "mouseCollisionRadius": 150,
+                "mouseCollisionDamping": 0.55
+              }
+            },
+            "buddhist-zen": {
+              "type": "zen",
+              "parameters": {
+                "baseSpeed": 40,
+                "maxTurnRate": 0.28,
+                "ema": 0.12,
+                "pad": 80,
+                "wallK": 32000,
+                "tau": 32,
+                "sigma": 0.18,
+                "breatheAmp": 0.12,
+                "breatheHz": 0.05,
+                "pauseProbability": 0.015,
+                "pauseDuration": { "min": 0.6, "max": 1.0 },
+                "flowStrength": 4,
+                "flowScale": 0.0008,
+                "flowTimeScale": 0.3,
+                "mouseAvoidanceRadius": 130,
+                "mouseAvoidanceStrength": 18,
+                "mouseCollisionRadius": 190,
+                "mouseCollisionDamping": 0.55
+              }
+            }
+          },
+          "lensProfiles": {
+            "engineer": { "strategy": "engineer-zen" },
+            "lw-math": { "strategy": "lw-flow" },
+            "embodied": { "strategy": "embodied-zen" },
+            "buddhist": { "strategy": "buddhist-zen" }
+          }
+        }
+      },
   "lensMapping": {
     "lw-math": {
       "projectOrder": ["lexion", "mapping-tpot", "customtales"],
