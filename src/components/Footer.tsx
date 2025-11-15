@@ -32,24 +32,24 @@ interface SocialLink {
 const socialLinks: SocialLink[] = [
   {
     name: 'Twitter',
-    url: content.footer.social.twitter,
+    url: content.footer.social.twitter.url,
     icon: Twitter,
     color: 'text-blue-400 hover:text-blue-300',
     description: 'Daily thoughts, threads, and community interactions',
     preview: {
-      title: '@aditya_arpitha',
+      title: content.footer.social.twitter.handle,
       subtitle: 'Building bridges between communities',
       activity: 'Active daily'
     }
   },
   {
     name: 'GitHub',
-    url: content.footer.social.github,
+    url: content.footer.social.github.url,
     icon: Github,
     color: 'text-zen-300 hover:text-zen-200',
     description: 'Open source projects and code repositories',
     preview: {
-      title: 'adityaarpitha',
+      title: content.footer.social.github.handle,
       subtitle: 'Tools, experiments, and learning in public',
       activity: 'Recent commits'
     }
@@ -109,7 +109,7 @@ export default function Footer() {
               viewport={{ once: true }}
             >
               <h3 className="text-2xl font-light text-zen-50 mb-4">
-                <span className="text-dharma-400">{content.footer.name.split(' ')[0]}</span> {content.footer.name.split(' ')[1]}
+                <span className="text-dharma-400">{content.footer.name}</span>
               </h3>
               <p className="text-zen-300 leading-relaxed mb-6">
                 {content.footer.description}

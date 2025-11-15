@@ -162,7 +162,7 @@ export default function SupportSection() {
   }
 
   return (
-    <section className="py-20 px-4 bg-gradient-to-b from-transparent to-zen-900/50">
+    <section id="support-section" className="py-20 px-4 bg-gradient-to-b from-transparent to-zen-900/50">
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

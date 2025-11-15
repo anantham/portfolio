@@ -22,7 +22,7 @@ export default function WritingSection() {
   }
 
   return (
-    <section className="py-20 px-4 bg-gradient-to-b from-transparent to-zen-900/30">
+    <section id="writing-section" className="py-20 px-4 bg-gradient-to-b from-transparent to-zen-900/30">
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -9,16 +9,26 @@
     }
   },
   "footer": {
-    "name": "Aditya Arpitha Prasad",
+    "name": "Aditya",
     "description": "Building bridges between niche subcultures through tools, essays, and rituals. Exploring the intersection of technology, community, and contemplative practice.",
     "builtWith": "Built with care and intention, aiming for Integrity",
     "social": {
-      "twitter": "https://twitter.com/adityaarpitha",
-      "github": "https://github.com/anantham",
+      "twitter": {
+        "url": "https://twitter.com/adityaarpitha",
+        "handle": "Aditya Arpitha"
+      },
+      "github": {
+        "url": "https://github.com/anantham",
+        "handle": "anantham"
+      },
       "linkedin": "https://linkedin.com/in/adityaarpitha",
       "substack": "https://adityaarpitha.substack.com",
       "youtube": "https://youtube.com/@adityaarpitha",
       "telegram": "https://t.me/+QZCiSoVarG49zSQ8"
+    },
+    "contact": {
+      "bookingUrl": "",
+      "telegramDM": "https://t.me/anantham"
     }
   },
   "hero": {
@@ -38,8 +48,8 @@
     }
   },
   "lenses": {
-    "title": "Four ways to meet me",
-    "subtitle": "We begin in applied engineer mode. Tap any story to lock in that perspective; tap it again to reopen the full spread of archetypes.",
+    "title": "The paths that led here",
+    "subtitle": "Gratitude to the traditions, teachers, and experiences that shaped these perspectives. Select one to see how it colors everything.",
     "archetypes": [
       {
         "id": "lw-math",
