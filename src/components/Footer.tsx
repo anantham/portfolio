@@ -32,7 +32,7 @@ interface SocialLink {
 const socialLinks: SocialLink[] = [
   {
     name: 'Twitter',
-    url: siteConfig.social.twitter,
+    url: content.footer.social.twitter,
     icon: Twitter,
     color: 'text-blue-400 hover:text-blue-300',
     description: 'Daily thoughts, threads, and community interactions',
@@ -44,7 +44,7 @@ const socialLinks: SocialLink[] = [
   },
   {
     name: 'GitHub',
-    url: siteConfig.social.github,
+    url: content.footer.social.github,
     icon: Github,
     color: 'text-zen-300 hover:text-zen-200',
     description: 'Open source projects and code repositories',
@@ -56,7 +56,7 @@ const socialLinks: SocialLink[] = [
   },
   {
     name: 'Substack',
-    url: siteConfig.social.substack,
+    url: content.footer.social.substack,
     icon: BookOpen,
     color: 'text-orange-400 hover:text-orange-300',
     description: 'Long-form writing and contemplative essays',
@@ -68,7 +68,7 @@ const socialLinks: SocialLink[] = [
   },
   {
     name: 'YouTube',
-    url: siteConfig.social.youtube,
+    url: content.footer.social.youtube,
     icon: Youtube,
     color: 'text-red-400 hover:text-red-300',
     description: 'Videos, talks, and visual explorations',
@@ -80,7 +80,7 @@ const socialLinks: SocialLink[] = [
   },
   {
     name: 'Telegram',
-    url: siteConfig.social.telegram,
+    url: content.footer.social.telegram,
     icon: Send,
     color: 'text-cyan-400 hover:text-cyan-300',
     description: 'Reading list and community discussions',
@@ -90,7 +90,7 @@ const socialLinks: SocialLink[] = [
       activity: 'Join the conversation'
     }
   }
-].filter(link => hasLink(link.url))
+]
 
 export default function Footer() {
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)

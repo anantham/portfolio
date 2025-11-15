@@ -11,7 +11,15 @@
   "footer": {
     "name": "Aditya Arpitha Prasad",
     "description": "Building bridges between niche subcultures through tools, essays, and rituals. Exploring the intersection of technology, community, and contemplative practice.",
-    "builtWith": "Built with care and intention, aiming for Integrity"
+    "builtWith": "Built with care and intention, aiming for Integrity",
+    "social": {
+      "twitter": "https://twitter.com/adityaarpitha",
+      "github": "https://github.com/anantham",
+      "linkedin": "https://linkedin.com/in/adityaarpitha",
+      "substack": "https://adityaarpitha.substack.com",
+      "youtube": "https://youtube.com/@adityaarpitha",
+      "telegram": "https://t.me/+QZCiSoVarG49zSQ8"
+    }
   },
   "hero": {
     "title": {
