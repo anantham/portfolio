@@ -8,7 +8,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { VaithyaAnimation, VaithyaDirection, VaithyaMood } from '@/lib/vaithya-types'
+import type { VaithyaAnimation, VaithyaDirection, VaithyaMood, VaithyaCostume } from '@/lib/vaithya-types'
 import { ANIMATION_SEQUENCES, SPRITE_SIZE } from '@/lib/vaithya-types'
 
 interface VaithyaSpriteProps {
@@ -16,6 +16,7 @@ interface VaithyaSpriteProps {
   frameIndex: number
   direction: VaithyaDirection
   mood: VaithyaMood
+  costume: VaithyaCostume  // v1.5
   color: string // From circadian theme
 }
 
@@ -24,11 +25,12 @@ export default function VaithyaSprite({
   frameIndex,
   direction,
   mood,
+  costume,
   color,
 }: VaithyaSpriteProps) {
   const [blinkState, setBlinkState] = useState<'open' | 'closing' | 'closed'>('open')
 
-  // Eye position based on animation
+  // Eye position based on animation (v1.5: added look_around)
   const getEyePosition = () => {
     switch (animation) {
       case 'point_right':
@@ -36,6 +38,16 @@ export default function VaithyaSprite({
         return 'right'
       case 'sleep':
         return 'closed'
+      case 'look_around':
+        // Change based on frame
+        if (frameIndex === 1) return 'left'
+        if (frameIndex === 2) return 'right'
+        if (frameIndex === 3) return 'up'
+        return 'forward'
+      case 'stretch':
+        return frameIndex === 1 ? 'closed' : 'up'
+      case 'scratch_head':
+        return 'up'
       default:
         return 'forward'
     }
@@ -64,7 +76,7 @@ export default function VaithyaSprite({
   const eyebrowStyle = getEyebrowStyle()
   const isFlipped = direction === 'left'
 
-  // Animation-specific transforms
+  // Animation-specific transforms (v1.5: added new animations)
   const getBodyTransform = () => {
     let transform = ''
 
@@ -86,6 +98,27 @@ export default function VaithyaSprite({
 
       case 'sleep':
         transform += 'rotate(90deg) translateX(8px) '
+        break
+
+      case 'stretch':
+        // Slight stretch up
+        transform += `scaleY(${1 + frameIndex * 0.05}) `
+        break
+
+      case 'scratch_head':
+        // Slight head tilt
+        transform += `rotate(${frameIndex === 1 ? -5 : 0}deg) `
+        break
+
+      case 'climb':
+        // Vertical bobbing while climbing
+        const climbBob = (frameIndex % 2 === 0 ? -2 : 2)
+        transform += `translateY(${climbBob}px) `
+        break
+
+      case 'peek':
+        // Only half visible (simulate peeking from edge)
+        transform += 'translateX(-16px) '
         break
     }
 
@@ -130,7 +163,7 @@ export default function VaithyaSprite({
           border: `1px solid ${color}`,
         }}
       >
-        {/* Eyes */}
+        {/* Eyes (v1.5: added up/left positions) */}
         {eyePosition !== 'closed' && (
           <>
             <div
@@ -138,8 +171,8 @@ export default function VaithyaSprite({
               style={{
                 width: 3,
                 height: 3,
-                left: eyePosition === 'right' ? 5 : 4,
-                top: 6,
+                left: eyePosition === 'right' ? 5 : eyePosition === 'left' ? 2 : 4,
+                top: eyePosition === 'up' ? 5 : 6,
                 backgroundColor: '#000',
                 borderRadius: '50%',
               }}
@@ -149,8 +182,8 @@ export default function VaithyaSprite({
               style={{
                 width: 3,
                 height: 3,
-                left: eyePosition === 'right' ? 10 : 9,
-                top: 6,
+                left: eyePosition === 'right' ? 10 : eyePosition === 'left' ? 7 : 9,
+                top: eyePosition === 'up' ? 5 : 6,
                 backgroundColor: '#000',
                 borderRadius: '50%',
               }}
@@ -240,8 +273,177 @@ export default function VaithyaSprite({
       {animation === 'sleep' && (
         <SleepParticles />
       )}
+
+      {/* v1.5: Arms for new animations */}
+      {animation === 'scratch_head' && frameIndex > 0 && (
+        <div
+          className="absolute"
+          style={{
+            width: 2,
+            height: 8,
+            left: 20,
+            top: 6,
+            backgroundColor: color,
+            borderRadius: '2px',
+            transform: 'rotate(-30deg)',
+            transformOrigin: 'top center',
+          }}
+        />
+      )}
+
+      {animation === 'stretch' && frameIndex > 0 && (
+        <>
+          <div
+            className="absolute"
+            style={{
+              width: 2,
+              height: 10,
+              left: 4,
+              top: 6,
+              backgroundColor: color,
+              borderRadius: '2px',
+              transform: frameIndex === 1 ? 'rotate(-110deg)' : 'rotate(-45deg)',
+              transformOrigin: 'bottom center',
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              width: 2,
+              height: 10,
+              left: 22,
+              top: 6,
+              backgroundColor: color,
+              borderRadius: '2px',
+              transform: frameIndex === 1 ? 'rotate(110deg)' : 'rotate(45deg)',
+              transformOrigin: 'bottom center',
+            }}
+          />
+        </>
+      )}
+
+      {animation === 'climb' && (
+        <div
+          className="absolute"
+          style={{
+            width: 2,
+            height: 8,
+            left: frameIndex % 2 === 0 ? 6 : 20,
+            top: 4,
+            backgroundColor: color,
+            borderRadius: '2px',
+            transform: 'rotate(-90deg)',
+          }}
+        />
+      )}
+
+      {/* v1.5: Costumes (hats) */}
+      {costume !== 'none' && <Costume costume={costume} color={color} />}
     </div>
   )
+}
+
+// v1.5: Costume component
+function Costume({ costume, color }: { costume: VaithyaCostume; color: string }) {
+  switch (costume) {
+    case 'builder_hat':
+      return (
+        <div
+          className="absolute"
+          style={{
+            width: 12,
+            height: 6,
+            left: 10,
+            top: 0,
+            backgroundColor: '#fbbf24', // Yellow
+            borderRadius: '4px 4px 0 0',
+            border: '1px solid #f59e0b',
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              width: 16,
+              height: 2,
+              left: -2,
+              bottom: -1,
+              backgroundColor: '#fbbf24',
+              borderRadius: '2px',
+            }}
+          />
+        </div>
+      )
+
+    case 'monk_robe':
+      return (
+        <div
+          className="absolute"
+          style={{
+            width: 18,
+            height: 10,
+            left: 7,
+            top: 1,
+            backgroundColor: '#f97316', // Orange
+            borderRadius: '8px 8px 0 0',
+            opacity: 0.9,
+            border: '1px solid #ea580c',
+          }}
+        />
+      )
+
+    case 'wizard_cap':
+      return (
+        <div
+          className="absolute"
+          style={{
+            width: 0,
+            height: 0,
+            left: 12,
+            top: -6,
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderBottom: '10px solid #3b82f6', // Blue
+            transform: 'rotate(10deg)',
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              width: 2,
+              height: 2,
+              left: -1,
+              top: -8,
+              backgroundColor: '#fbbf24',
+              borderRadius: '50%',
+            }}
+          />
+        </div>
+      )
+
+    case 'leaf_crown':
+      return (
+        <>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="absolute"
+              style={{
+                width: 4,
+                height: 6,
+                left: 8 + i * 4,
+                top: 0,
+                backgroundColor: '#22c55e', // Green
+                borderRadius: '2px 2px 0 0',
+                transform: `rotate(${(i - 1) * 15}deg)`,
+              }}
+            />
+          ))}
+        </>
+      )
+
+    default:
+      return null
+  }
 }
 
 function SleepParticles() {

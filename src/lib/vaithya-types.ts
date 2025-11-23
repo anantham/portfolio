@@ -35,6 +35,11 @@ export type VaithyaAnimation =
   | 'sit'
   | 'sleep'
   | 'blink'
+  | 'look_around'    // v1.5
+  | 'scratch_head'   // v1.5
+  | 'stretch'        // v1.5
+  | 'climb'          // v1.5
+  | 'peek'           // v1.5
 
 export type VaithyaDirection = 'left' | 'right'
 
@@ -182,6 +187,54 @@ export const ANIMATION_SEQUENCES: Record<VaithyaAnimation, AnimationSequence> = 
     ],
     loop: false,
     fps: 10,
+  },
+  // v1.5 animations
+  look_around: {
+    frames: [
+      { row: 6, col: 0, duration: 500 },  // Look forward
+      { row: 6, col: 1, duration: 500 },  // Look left
+      { row: 6, col: 2, duration: 500 },  // Look right
+      { row: 6, col: 3, duration: 500 },  // Look up
+      { row: 6, col: 0, duration: 500 },  // Back to forward
+    ],
+    loop: false,
+    fps: 2,
+  },
+  scratch_head: {
+    frames: [
+      { row: 7, col: 0, duration: 400 },  // Raise arm
+      { row: 7, col: 1, duration: 800 },  // Scratch
+      { row: 7, col: 2, duration: 400 },  // Lower arm
+    ],
+    loop: false,
+    fps: 3,
+  },
+  stretch: {
+    frames: [
+      { row: 8, col: 0, duration: 600 },  // Arms starting to raise
+      { row: 8, col: 1, duration: 1000 }, // Arms fully up
+      { row: 8, col: 2, duration: 600 },  // Arms lowering
+    ],
+    loop: false,
+    fps: 2,
+  },
+  climb: {
+    frames: [
+      { row: 9, col: 0, duration: 200 },  // Reach up
+      { row: 9, col: 1, duration: 200 },  // Pull
+      { row: 9, col: 2, duration: 200 },  // Reach up (alt)
+      { row: 9, col: 3, duration: 200 },  // Pull (alt)
+    ],
+    loop: true,
+    fps: 5,
+  },
+  peek: {
+    frames: [
+      { row: 10, col: 0, duration: 1000 }, // Peeking (half visible)
+      { row: 10, col: 1, duration: 150 },  // Blink while peeking
+    ],
+    loop: true,
+    fps: 2,
   },
 }
 

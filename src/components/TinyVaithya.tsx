@@ -9,9 +9,10 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAtmosphere } from '@/contexts/AtmosphereContext'
+import { useLens } from '@/contexts/LensContext'
 import { VaithyaStateMachine } from '@/lib/vaithya-state-machine'
 import VaithyaSprite from './VaithyaSprite'
-import type { VaithyaBehavior } from '@/lib/vaithya-types'
+import type { VaithyaBehavior, VaithyaCostume } from '@/lib/vaithya-types'
 import { ANIMATION_SEQUENCES } from '@/lib/vaithya-types'
 
 export default function TinyVaithya() {
@@ -24,6 +25,8 @@ export default function TinyVaithya() {
     uiComplexity,
     getNovelty,
   } = useAtmosphere()
+
+  const { selectedLens } = useLens()
 
   const [vaithyaState, setVaithyaState] = useState<ReturnType<VaithyaStateMachine['getState']> | null>(null)
   const stateMachineRef = useRef<VaithyaStateMachine | null>(null)
@@ -105,13 +108,31 @@ export default function TinyVaithya() {
     }
   }, [memory.visitCount, circadian.phase])
 
-  // Costume based on lens and time
+  // v1.5: Costume based on lens and time
   useEffect(() => {
     if (!stateMachineRef.current) return
 
-    const getCostume = () => {
+    const getCostume = (): VaithyaCostume => {
+      // Night time: monk robe (contemplative)
       if (circadian.phase === 'night') return 'monk_robe'
+
+      // Lens-based costumes
+      if (selectedLens) {
+        switch (selectedLens) {
+          case 'engineer':
+            return 'builder_hat'
+          case 'lw-math':
+            return 'wizard_cap'
+          case 'buddhist':
+            return 'monk_robe'
+          case 'embodied':
+            return 'leaf_crown'
+        }
+      }
+
+      // Default: builder hat during high energy
       if (circadian.energy > 0.7) return 'builder_hat'
+
       return 'none'
     }
 
@@ -124,7 +145,7 @@ export default function TinyVaithya() {
         costume,
       })
     }
-  }, [circadian.phase, circadian.energy])
+  }, [circadian.phase, circadian.energy, selectedLens])
 
   // React to user idle
   useEffect(() => {
@@ -177,6 +198,37 @@ export default function TinyVaithya() {
       })
     }
   }, [behavior.scrollSpeed])
+
+  // v1.5: Idle variant behaviors (look around, scratch, stretch)
+  useEffect(() => {
+    if (!stateMachineRef.current) return
+
+    const playIdleVariant = () => {
+      if (!stateMachineRef.current) return
+      const currentState = stateMachineRef.current.getState()
+
+      // Only play variants when truly idle
+      if (currentState.state !== 'IDLE') return
+      if (currentState.isReducedMotion) return
+
+      // Random chance for each variant
+      const rand = Math.random()
+
+      if (rand < 0.02) {
+        // 2% chance: look around
+        // Temporarily play animation
+        const prevAnim = currentState.currentAnimation
+        stateMachineRef.current.applyBehavior({ action: 'STAY_IDLE' })
+        // This would require extending the state machine to play one-shot animations
+        // For now, we'll handle this in v2.0
+      }
+    }
+
+    // Check every 5 seconds for idle variants
+    const interval = setInterval(playIdleVariant, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   // Section discovery behavior
   useEffect(() => {
@@ -231,6 +283,7 @@ export default function TinyVaithya() {
         frameIndex={currentFrame}
         direction={vaithyaState.direction}
         mood={vaithyaState.mood}
+        costume={vaithyaState.costume}
         color={theme.accent}
       />
 
