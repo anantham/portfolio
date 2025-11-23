@@ -28,6 +28,9 @@ export class VaithyaStateMachine {
       position: initialPosition,
       targetPosition: null,
       direction: 'right',
+      pathProgress: 0,
+      pathStartPosition: null,
+      pathControlPoint: null,
       currentAnimation: 'idle',
       frameIndex: 0,
       lastFrameTime: Date.now(),
@@ -107,6 +110,14 @@ export class VaithyaStateMachine {
 
       case 'PEEK_AT_ELEMENT':
         this.peekAtElement(behavior.targetId!, behavior.position)
+        break
+
+      case 'WANDER':
+        this.wander()
+        break
+
+      case 'FOLLOW_CURSOR':
+        this.followCursor(behavior.position)
         break
 
       case 'GO_TO_SLEEP':
@@ -208,6 +219,17 @@ export class VaithyaStateMachine {
           this.playOneShotAnimation('stretch') // Celebratory stretch!
         }
         break
+
+      case 'VIEWPORT_RESIZE':
+        // v3.0: React to viewport resize
+        if (this.state.state === 'IDLE' || this.state.state === 'SITTING') {
+          this.playOneShotAnimation('look_around') // Look around at the new space
+        }
+        break
+
+      case 'MOUSE_MOVE':
+        // v3.0: Handled externally - cursor following logic
+        break
     }
   }
 
@@ -253,26 +275,52 @@ export class VaithyaStateMachine {
       return
     }
 
-    const { x: currentX, y: currentY } = this.state.position
-    const { x: targetX, y: targetY } = this.state.targetPosition
+    // v3.0: Initialize bezier path on first frame
+    if (!this.state.pathStartPosition) {
+      this.state.pathStartPosition = { ...this.state.position }
+      this.state.pathProgress = 0
 
-    const dx = targetX - currentX
-    const dy = targetY - currentY
-    const distance = Math.sqrt(dx * dx + dy * dy)
+      // Generate smooth bezier control point
+      const dx = this.state.targetPosition.x - this.state.position.x
+      const dy = this.state.targetPosition.y - this.state.position.y
 
-    // Reached target?
-    if (distance < 5) {
-      this.state.position = this.state.targetPosition
-      this.state.targetPosition = null
-      this.transitionTo('IDLE')
-      return
+      // Control point creates a gentle curve (offset perpendicular to path)
+      const midX = this.state.position.x + dx * 0.5
+      const midY = this.state.position.y + dy * 0.5
+      const offsetX = -dy * 0.2 * (Math.random() - 0.5) // Perpendicular offset
+      const offsetY = dx * 0.2 * (Math.random() - 0.5)
+
+      this.state.pathControlPoint = {
+        x: midX + offsetX,
+        y: midY + offsetY,
+      }
     }
 
-    // Move toward target
-    const moveDistance = (WALK_SPEED * deltaTime) / 1000
-    const ratio = moveDistance / distance
-    const newX = currentX + dx * ratio
-    const newY = currentY + dy * ratio
+    // Calculate total path length for consistent speed
+    const start = this.state.pathStartPosition!
+    const control = this.state.pathControlPoint!
+    const target = this.state.targetPosition
+
+    // Estimate path length (rough approximation)
+    const straightDist = Math.sqrt(
+      Math.pow(target.x - start.x, 2) + Math.pow(target.y - start.y, 2)
+    )
+
+    // Advance progress based on speed
+    const progressDelta = (WALK_SPEED * deltaTime) / (1000 * straightDist)
+    this.state.pathProgress = Math.min(1, this.state.pathProgress + progressDelta)
+
+    // Quadratic bezier curve: B(t) = (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
+    const t = this.state.pathProgress
+    const oneMinusT = 1 - t
+
+    const newX = oneMinusT * oneMinusT * start.x +
+                 2 * oneMinusT * t * control.x +
+                 t * t * target.x
+
+    const newY = oneMinusT * oneMinusT * start.y +
+                 2 * oneMinusT * t * control.y +
+                 t * t * target.y
 
     // v2.5: Enforce spatial boundaries
     this.state.position = {
@@ -280,8 +328,19 @@ export class VaithyaStateMachine {
       y: Math.max(0, Math.min(window.innerHeight - SPRITE_SIZE, newY)),
     }
 
-    // Update direction
+    // Update direction based on movement
+    const dx = newX - (this.state.position.x || 0)
     this.state.direction = dx > 0 ? 'right' : 'left'
+
+    // Reached target?
+    if (this.state.pathProgress >= 1) {
+      this.state.position = this.state.targetPosition
+      this.state.targetPosition = null
+      this.state.pathStartPosition = null
+      this.state.pathControlPoint = null
+      this.state.pathProgress = 0
+      this.transitionTo('IDLE')
+    }
   }
 
   private updatePointing(): void {
@@ -512,6 +571,44 @@ export class VaithyaStateMachine {
         this.transitionTo('WALKING')
       }
     }, 2000) // Peek for 2 seconds
+  }
+
+  private wander(): void {
+    // v3.0: Random wandering when bored
+    // Pick a random point on screen to walk to
+    const margin = 50
+    const randomX = margin + Math.random() * (window.innerWidth - SPRITE_SIZE - 2 * margin)
+    const randomY = margin + Math.random() * (window.innerHeight - SPRITE_SIZE - 2 * margin)
+
+    this.state.targetPosition = {
+      x: randomX,
+      y: randomY,
+    }
+
+    this.transitionTo('WALKING')
+
+    // Return to idle after arriving
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE') {
+        clearInterval(checkArrival)
+      }
+    }, 100)
+  }
+
+  private followCursor(cursorPosition?: Position): void {
+    // v3.0: Follow the mouse cursor
+    if (!cursorPosition) return
+
+    // Walk towards cursor (but not directly on it)
+    const offsetX = (Math.random() - 0.5) * 100 // Random offset ±50px
+    const offsetY = (Math.random() - 0.5) * 100
+
+    this.state.targetPosition = {
+      x: Math.max(0, Math.min(window.innerWidth - SPRITE_SIZE, cursorPosition.x + offsetX)),
+      y: Math.max(0, Math.min(window.innerHeight - SPRITE_SIZE, cursorPosition.y + offsetY)),
+    }
+
+    this.transitionTo('WALKING')
   }
 
   // --- State Transitions ---

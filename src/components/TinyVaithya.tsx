@@ -333,11 +333,11 @@ export default function TinyVaithya() {
     behavior.sessionDuration,
   ])
 
-  // v2.0: Contextual idle variant behaviors
+  // v3.0: Personality quirks and idle behaviors
   useEffect(() => {
     if (!stateMachineRef.current) return
 
-    const playIdleVariant = () => {
+    const playPersonalityQuirk = () => {
       if (!stateMachineRef.current) return
       const currentState = stateMachineRef.current.getState()
 
@@ -348,23 +348,124 @@ export default function TinyVaithya() {
       // Random chance for each variant
       const rand = Math.random()
 
-      if (rand < 0.15) {
-        // 15% chance: look around when idle
+      if (rand < 0.10) {
+        // 10% chance: look around when idle
         stateMachineRef.current.playOneShotAnimation('look_around')
-      } else if (rand < 0.20) {
-        // 5% chance: scratch head (subtle curiosity)
+      } else if (rand < 0.13) {
+        // 3% chance: scratch head (subtle curiosity)
         stateMachineRef.current.playOneShotAnimation('scratch_head')
-      } else if (rand < 0.23 && behavior.sessionDuration > 300) {
-        // 3% chance after 5min: stretch (long session)
+      } else if (rand < 0.15 && behavior.sessionDuration > 300) {
+        // 2% chance after 5min: stretch (long session)
         stateMachineRef.current.playOneShotAnimation('stretch')
+      } else if (rand < 0.17 && circadian.energy < 0.4) {
+        // 2% chance when low energy: yawn
+        stateMachineRef.current.playOneShotAnimation('yawn')
+      } else if (rand < 0.18) {
+        // 1% chance: fidget
+        stateMachineRef.current.playOneShotAnimation('fidget')
       }
     }
 
     // Check every 5 seconds for idle variants
-    const interval = setInterval(playIdleVariant, 5000)
+    const interval = setInterval(playPersonalityQuirk, 5000)
 
     return () => clearInterval(interval)
-  }, [behavior.sessionDuration])
+  }, [behavior.sessionDuration, circadian.energy])
+
+  // v3.0: Random wandering when bored
+  useEffect(() => {
+    if (!stateMachineRef.current) return
+    if (uiComplexity === 'minimal') return // Respect minimal UI
+
+    const wanderWhenBored = () => {
+      if (!stateMachineRef.current) return
+      const currentState = stateMachineRef.current.getState()
+
+      // Wander when idle for a while and playful/curious mood
+      if (currentState.state === 'IDLE' || currentState.state === 'SITTING') {
+        const timeSinceLastAction = Date.now() - currentState.lastActionTime
+
+        // After 20 seconds of idle + playful/curious mood: maybe wander
+        if (timeSinceLastAction > 20000 &&
+            (currentState.mood === 'playful' || currentState.mood === 'curious') &&
+            Math.random() < 0.3) {
+          stateMachineRef.current.applyBehavior({
+            action: 'WANDER',
+            cooldown: 15000, // Don't wander too frequently
+          })
+        }
+      }
+    }
+
+    // Check every 10 seconds
+    const interval = setInterval(wanderWhenBored, 10000)
+
+    return () => clearInterval(interval)
+  }, [uiComplexity])
+
+  // v3.0: Mouse cursor awareness
+  useEffect(() => {
+    if (!stateMachineRef.current) return
+    if (familiarityLevel === 'newcomer') return // Not for first-timers
+    if (uiComplexity === 'minimal') return
+
+    let lastFollowTime = 0
+    let lastMousePos = { x: 0, y: 0 }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      lastMousePos = { x: e.clientX, y: e.clientY }
+
+      // Occasionally follow cursor (5% chance when idle and 30+ seconds since last follow)
+      if (!stateMachineRef.current) return
+      const currentState = stateMachineRef.current.getState()
+      const now = Date.now()
+
+      if (currentState.state === 'IDLE' &&
+          currentState.mood === 'playful' &&
+          now - lastFollowTime > 30000 &&
+          Math.random() < 0.05) {
+
+        lastFollowTime = now
+        stateMachineRef.current.applyBehavior({
+          action: 'FOLLOW_CURSOR',
+          position: lastMousePos,
+          cooldown: 25000,
+        })
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+    }
+  }, [familiarityLevel, uiComplexity])
+
+  // v3.0: Viewport resize reactions
+  useEffect(() => {
+    if (!stateMachineRef.current) return
+
+    let resizeTimeout: NodeJS.Timeout
+
+    const handleResize = () => {
+      clearTimeout(resizeTimeout)
+
+      // Debounce resize events
+      resizeTimeout = setTimeout(() => {
+        stateMachineRef.current?.queueEvent({
+          type: 'VIEWPORT_RESIZE',
+          timestamp: Date.now(),
+        })
+      }, 500)
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      clearTimeout(resizeTimeout)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   // v2.5: Intelligent project discovery with climb/peek/point behaviors
   useEffect(() => {

@@ -42,6 +42,8 @@ export type VaithyaAnimation =
   | 'stretch'        // v1.5
   | 'climb'          // v1.5
   | 'peek'           // v1.5
+  | 'yawn'           // v3.0
+  | 'fidget'         // v3.0
 
 export type VaithyaDirection = 'left' | 'right'
 
@@ -60,6 +62,9 @@ export interface VaithyaFullState {
   position: Position
   targetPosition: Position | null
   direction: VaithyaDirection
+  pathProgress: number         // v3.0: 0-1 for bezier curve progress
+  pathStartPosition: Position | null  // v3.0: Start of current path
+  pathControlPoint: Position | null   // v3.0: Bezier control point
 
   // Animation
   currentAnimation: VaithyaAnimation
@@ -93,6 +98,8 @@ export type VaithyaAction =
   | 'SIT_ON_ELEMENT'
   | 'CLIMB_ON_ELEMENT'    // v2.5
   | 'PEEK_AT_ELEMENT'     // v2.5
+  | 'WANDER'              // v3.0
+  | 'FOLLOW_CURSOR'       // v3.0
   | 'GO_TO_SLEEP'
   | 'WAKE_UP'
   | 'STAY_IDLE'
@@ -119,6 +126,8 @@ export type VaithyaEventType =
   | 'TIME_OF_DAY_CHANGE'
   | 'REDUCED_MOTION_CHANGE'
   | 'CELEBRATE'        // v2.5
+  | 'VIEWPORT_RESIZE'  // v3.0
+  | 'MOUSE_MOVE'       // v3.0
 
 export interface AnimationFrame {
   row: number
@@ -240,6 +249,26 @@ export const ANIMATION_SEQUENCES: Record<VaithyaAnimation, AnimationSequence> = 
     ],
     loop: true,
     fps: 2,
+  },
+  // v3.0 animations
+  yawn: {
+    frames: [
+      { row: 11, col: 0, duration: 400 },  // Mouth opening
+      { row: 11, col: 1, duration: 800 },  // Yawn held
+      { row: 11, col: 2, duration: 400 },  // Mouth closing
+    ],
+    loop: false,
+    fps: 3,
+  },
+  fidget: {
+    frames: [
+      { row: 12, col: 0, duration: 200 },  // Shift left
+      { row: 12, col: 1, duration: 200 },  // Center
+      { row: 12, col: 2, duration: 200 },  // Shift right
+      { row: 12, col: 1, duration: 200 },  // Back to center
+    ],
+    loop: false,
+    fps: 5,
   },
 }
 
