@@ -11,6 +11,8 @@ export type VaithyaState =
   | 'POINTING'
   | 'SITTING'
   | 'SLEEPING'
+  | 'CLIMBING'      // v2.5
+  | 'PEEKING'       // v2.5
   | 'TRANSITIONING'
 
 export type VaithyaMood =
@@ -89,6 +91,8 @@ export type VaithyaAction =
   | 'WALK_TO_ELEMENT'
   | 'POINT_AT_ELEMENT'
   | 'SIT_ON_ELEMENT'
+  | 'CLIMB_ON_ELEMENT'    // v2.5
+  | 'PEEK_AT_ELEMENT'     // v2.5
   | 'GO_TO_SLEEP'
   | 'WAKE_UP'
   | 'STAY_IDLE'
@@ -114,6 +118,7 @@ export type VaithyaEventType =
   | 'SCROLL_STOP'
   | 'TIME_OF_DAY_CHANGE'
   | 'REDUCED_MOTION_CHANGE'
+  | 'CELEBRATE'        // v2.5
 
 export interface AnimationFrame {
   row: number

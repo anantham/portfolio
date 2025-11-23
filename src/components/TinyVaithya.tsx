@@ -131,7 +131,7 @@ export default function TinyVaithya() {
     }
   }, [memory.visitCount, circadian.phase])
 
-  // v1.5: Costume based on lens and time
+  // v2.5: Costume based on lens and time with transition reactions
   useEffect(() => {
     if (!stateMachineRef.current) return
 
@@ -163,18 +163,34 @@ export default function TinyVaithya() {
     const currentState = stateMachineRef.current.getState()
 
     if (currentState.costume !== costume) {
-      stateMachineRef.current.applyBehavior({
-        action: 'STAY_IDLE',
-        costume,
-      })
+      // v2.5: Play transition animation when costume changes due to lens selection
+      if (selectedLens && currentState.state === 'IDLE') {
+        // Look around in wonder at the costume change
+        stateMachineRef.current.playOneShotAnimation('look_around')
+
+        // Apply costume after animation
+        setTimeout(() => {
+          stateMachineRef.current?.applyBehavior({
+            action: 'STAY_IDLE',
+            costume,
+          })
+        }, 2500) // After look_around completes
+      } else {
+        // No lens change, just update costume
+        stateMachineRef.current.applyBehavior({
+          action: 'STAY_IDLE',
+          costume,
+        })
+      }
     }
   }, [circadian.phase, circadian.energy, selectedLens])
 
-  // React to user idle
+  // React to user idle and celebrate clicks
   useEffect(() => {
     if (!stateMachineRef.current) return
 
     let idleTimer: NodeJS.Timeout
+    let lastCelebration = 0
 
     const resetIdle = () => {
       clearTimeout(idleTimer)
@@ -194,10 +210,28 @@ export default function TinyVaithya() {
       }, 45000) // 45 seconds
     }
 
+    // v2.5: Celebrate meaningful clicks
+    const handleClick = (e: MouseEvent) => {
+      resetIdle()
+
+      // Celebrate clicks on buttons, links, interactive elements
+      const target = e.target as HTMLElement
+      const isInteractive = target.closest('button, a, [role="button"], [data-project-id]')
+
+      if (isInteractive && Date.now() - lastCelebration > 10000) {
+        // Celebrate max once per 10 seconds
+        lastCelebration = Date.now()
+        stateMachineRef.current?.queueEvent({
+          type: 'CELEBRATE',
+          timestamp: Date.now(),
+        })
+      }
+    }
+
     // Track user activity
     window.addEventListener('mousemove', resetIdle)
     window.addEventListener('scroll', resetIdle)
-    window.addEventListener('click', resetIdle)
+    window.addEventListener('click', handleClick)
     window.addEventListener('keydown', resetIdle)
 
     resetIdle() // Start timer
@@ -206,7 +240,7 @@ export default function TinyVaithya() {
       clearTimeout(idleTimer)
       window.removeEventListener('mousemove', resetIdle)
       window.removeEventListener('scroll', resetIdle)
-      window.removeEventListener('click', resetIdle)
+      window.removeEventListener('click', handleClick)
       window.removeEventListener('keydown', resetIdle)
     }
   }, [])
@@ -332,7 +366,7 @@ export default function TinyVaithya() {
     return () => clearInterval(interval)
   }, [behavior.sessionDuration])
 
-  // v2.0: Intelligent project discovery with novelty scoring
+  // v2.5: Intelligent project discovery with climb/peek/point behaviors
   useEffect(() => {
     if (!stateMachineRef.current) return
     if (uiComplexity === 'minimal') return // Respect minimal UI
@@ -365,21 +399,43 @@ export default function TinyVaithya() {
         .filter(item => item.isVisible && item.novelty > 0.5) // Only novel items
         .sort((a, b) => b.novelty - a.novelty) // Highest novelty first
 
-      // Point at the most novel visible item
+      // Choose behavior based on element type and novelty
       if (scoredElements.length > 0) {
         const target = scoredElements[0]
+        const isProjectCard = target.element.hasAttribute('data-project-id')
+        const isSection = target.id.endsWith('-section')
 
         setTimeout(() => {
-          stateMachineRef.current?.applyBehavior({
-            action: 'POINT_AT_ELEMENT',
-            targetId: target.id,
-            position: {
-              x: Math.max(20, target.rect.left - 50),
-              y: target.rect.top + target.rect.height / 2 - 16,
-            },
-            mood: target.novelty > 0.8 ? 'curious' : 'playful',
-            cooldown: 15000, // Don't spam pointing
-          })
+          // v2.5: Different behaviors for different elements
+          if (isProjectCard && target.novelty > 0.9 && familiarityLevel !== 'newcomer') {
+            // Highly novel project card + not first visit = climb on it!
+            stateMachineRef.current?.applyBehavior({
+              action: 'CLIMB_ON_ELEMENT',
+              targetId: target.id,
+              mood: 'playful',
+              cooldown: 20000,
+            })
+          } else if (isSection && memory.visitCount === 1) {
+            // First visit to new section = peek first
+            stateMachineRef.current?.applyBehavior({
+              action: 'PEEK_AT_ELEMENT',
+              targetId: target.id,
+              mood: 'curious',
+              cooldown: 15000,
+            })
+          } else {
+            // Default: just point
+            stateMachineRef.current?.applyBehavior({
+              action: 'POINT_AT_ELEMENT',
+              targetId: target.id,
+              position: {
+                x: Math.max(20, target.rect.left - 50),
+                y: target.rect.top + target.rect.height / 2 - 16,
+              },
+              mood: target.novelty > 0.8 ? 'curious' : 'playful',
+              cooldown: 15000,
+            })
+          }
         }, 2000)
       }
     }
@@ -401,7 +457,7 @@ export default function TinyVaithya() {
       clearTimeout(scrollTimeout)
       window.removeEventListener('scroll', handleScroll)
     }
-  }, [memory.seenNodes, uiComplexity, getNovelty])
+  }, [memory.seenNodes, uiComplexity, getNovelty, familiarityLevel, memory.visitCount])
 
   if (!vaithyaState || !vaithyaState.isVisible) {
     return null

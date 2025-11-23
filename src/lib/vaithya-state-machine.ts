@@ -101,6 +101,14 @@ export class VaithyaStateMachine {
         this.sitOnElement(behavior.targetId!, behavior.position)
         break
 
+      case 'CLIMB_ON_ELEMENT':
+        this.climbOnElement(behavior.targetId!, behavior.position)
+        break
+
+      case 'PEEK_AT_ELEMENT':
+        this.peekAtElement(behavior.targetId!, behavior.position)
+        break
+
       case 'GO_TO_SLEEP':
         this.goToSleep(behavior.position)
         break
@@ -193,6 +201,13 @@ export class VaithyaStateMachine {
       case 'SCROLL_STOP':
         // Resume normal behavior
         break
+
+      case 'CELEBRATE':
+        // v2.5: Celebrate user interactions
+        if (this.state.state === 'IDLE' || this.state.state === 'SITTING') {
+          this.playOneShotAnimation('stretch') // Celebratory stretch!
+        }
+        break
     }
   }
 
@@ -216,6 +231,14 @@ export class VaithyaStateMachine {
 
       case 'SLEEPING':
         this.updateSleeping()
+        break
+
+      case 'CLIMBING':
+        this.updateClimbing()
+        break
+
+      case 'PEEKING':
+        this.updatePeeking()
         break
 
       case 'IDLE':
@@ -248,9 +271,13 @@ export class VaithyaStateMachine {
     // Move toward target
     const moveDistance = (WALK_SPEED * deltaTime) / 1000
     const ratio = moveDistance / distance
+    const newX = currentX + dx * ratio
+    const newY = currentY + dy * ratio
+
+    // v2.5: Enforce spatial boundaries
     this.state.position = {
-      x: currentX + dx * ratio,
-      y: currentY + dy * ratio,
+      x: Math.max(0, Math.min(window.innerWidth - SPRITE_SIZE, newX)),
+      y: Math.max(0, Math.min(window.innerHeight - SPRITE_SIZE, newY)),
     }
 
     // Update direction
@@ -273,6 +300,20 @@ export class VaithyaStateMachine {
 
   private updateSleeping(): void {
     // Sleeping continues until woken
+  }
+
+  private updateClimbing(): void {
+    // Check if target element is still visible
+    if (this.state.targetElementId) {
+      const element = document.getElementById(this.state.targetElementId)
+      if (!element || !this.isElementVisible(element)) {
+        this.transitionTo('IDLE')
+      }
+    }
+  }
+
+  private updatePeeking(): void {
+    // Peeking is time-based, will auto-transition
   }
 
   private updateIdle(): void {
@@ -408,6 +449,71 @@ export class VaithyaStateMachine {
     }, 100)
   }
 
+  private climbOnElement(elementId: string, position?: Position): void {
+    this.state.targetElementId = elementId
+
+    // Walk to element first
+    this.walkToElement(elementId, position)
+
+    // Set up transition to climbing after reaching destination
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE') {
+        clearInterval(checkArrival)
+
+        // Position on top of element
+        const element = document.getElementById(elementId)
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          this.state.position = {
+            x: rect.left + rect.width / 2 - SPRITE_SIZE / 2,
+            y: rect.top - SPRITE_SIZE - 5, // Just above element
+          }
+        }
+
+        this.transitionTo('CLIMBING')
+
+        // Auto-transition to sitting after climbing
+        setTimeout(() => {
+          if (this.state.state === 'CLIMBING') {
+            this.transitionTo('SITTING')
+          }
+        }, 3000) // Climb for 3 seconds
+      }
+    }, 100)
+  }
+
+  private peekAtElement(elementId: string, position?: Position): void {
+    this.state.targetElementId = elementId
+
+    // Position at edge of screen near element
+    const element = document.getElementById(elementId)
+    if (element) {
+      const rect = element.getBoundingClientRect()
+
+      // Peek from left or right edge
+      const peekFromLeft = rect.left < window.innerWidth / 2
+      this.state.position = {
+        x: peekFromLeft ? -SPRITE_SIZE / 2 : window.innerWidth - SPRITE_SIZE / 2,
+        y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
+      }
+      this.state.direction = peekFromLeft ? 'right' : 'left'
+    }
+
+    this.transitionTo('PEEKING')
+
+    // Auto-transition to entering after peeking
+    setTimeout(() => {
+      if (this.state.state === 'PEEKING' && element) {
+        const rect = element.getBoundingClientRect()
+        this.state.targetPosition = {
+          x: rect.left - SPRITE_SIZE - 10,
+          y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
+        }
+        this.transitionTo('WALKING')
+      }
+    }, 2000) // Peek for 2 seconds
+  }
+
   // --- State Transitions ---
 
   private transitionTo(newState: VaithyaState): void {
@@ -434,6 +540,12 @@ export class VaithyaStateMachine {
         break
       case 'SLEEPING':
         this.state.currentAnimation = 'sleep'
+        break
+      case 'CLIMBING':
+        this.state.currentAnimation = 'climb'
+        break
+      case 'PEEKING':
+        this.state.currentAnimation = 'peek'
         break
     }
 
