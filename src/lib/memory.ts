@@ -20,6 +20,10 @@ export interface MemoryState {
   preferences: {
     selectedLens?: string     // Last selected lens
   }
+  vaithyaPosition?: {         // v2.0: Remember where Vaithya was
+    x: number
+    y: number
+  }
 }
 
 export interface BehaviorState {
@@ -176,6 +180,23 @@ export function savePreference(key: keyof MemoryState['preferences'], value: any
 export function getPreference(key: keyof MemoryState['preferences']): any {
   const state = getMemoryState()
   return state.preferences[key]
+}
+
+/**
+ * v2.0: Save Vaithya's position for returning visitors
+ */
+export function saveVaithyaPosition(x: number, y: number): void {
+  const state = getMemoryState()
+  state.vaithyaPosition = { x, y }
+  saveMemoryState(state)
+}
+
+/**
+ * v2.0: Get Vaithya's last position (or null for first visit)
+ */
+export function getVaithyaPosition(): { x: number; y: number } | null {
+  const state = getMemoryState()
+  return state.vaithyaPosition || null
 }
 
 /**

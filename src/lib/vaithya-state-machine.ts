@@ -440,19 +440,39 @@ export class VaithyaStateMachine {
     this.state.frameIndex = 0
   }
 
-  private playAnimationOnce(animation: VaithyaAnimation): void {
+  /**
+   * Play a one-shot animation and return to previous animation
+   * Used for idle variants, reactions, etc.
+   */
+  playOneShotAnimation(animation: VaithyaAnimation): void {
+    if (this.state.isReducedMotion) return
+
     // Store current animation to restore after
     const prevAnimation = this.state.currentAnimation
+    const prevState = this.state.state
+
+    // Only play one-shots during IDLE or SITTING states
+    if (prevState !== 'IDLE' && prevState !== 'SITTING') return
+
     this.state.currentAnimation = animation
     this.state.frameIndex = 0
 
-    // Restore after animation completes (rough timing)
+    // Calculate duration from animation sequence
+    const sequence = require('./vaithya-types').ANIMATION_SEQUENCES[animation]
+    const duration = sequence.frames.reduce((sum: number, frame: { duration: number }) => sum + frame.duration, 0)
+
+    // Restore after animation completes
     setTimeout(() => {
       if (this.state.currentAnimation === animation) {
         this.state.currentAnimation = prevAnimation
         this.state.frameIndex = 0
       }
-    }, 500)
+    }, duration)
+  }
+
+  private playAnimationOnce(animation: VaithyaAnimation): void {
+    // Internal version for blinks
+    this.playOneShotAnimation(animation)
   }
 
   // --- Cooldown Management ---
