@@ -3,7 +3,10 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import Footer from '@/components/Footer'
 import WanderingDharmaWheel from '@/components/WanderingDharmaWheel'
+import CircadianBackground from '@/components/CircadianBackground'
+import AtmosphereDebugPanel from '@/components/AtmosphereDebugPanel'
 import { LensProvider } from '@/contexts/LensContext'
+import { AtmosphereProvider } from '@/contexts/AtmosphereContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -39,14 +42,20 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-zen-900 text-zen-50 antialiased`}>
-        <LensProvider>
-          <div className="min-h-screen zen-gradient">
-            {/* Wandering dharma wheel in background */}
-            <WanderingDharmaWheel />
-            {children}
-            <Footer />
-          </div>
-        </LensProvider>
+        <AtmosphereProvider>
+          <LensProvider>
+            <div className="min-h-screen relative">
+              {/* Time-aware atmospheric background */}
+              <CircadianBackground />
+              {/* Wandering dharma wheel in background */}
+              <WanderingDharmaWheel />
+              {children}
+              <Footer />
+              {/* Debug panel - toggle with Alt+D */}
+              <AtmosphereDebugPanel />
+            </div>
+          </LensProvider>
+        </AtmosphereProvider>
       </body>
     </html>
   )
