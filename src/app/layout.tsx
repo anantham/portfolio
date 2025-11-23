@@ -5,6 +5,7 @@ import Footer from '@/components/Footer'
 import WanderingDharmaWheel from '@/components/WanderingDharmaWheel'
 import CircadianBackground from '@/components/CircadianBackground'
 import AtmosphereDebugPanel from '@/components/AtmosphereDebugPanel'
+import TinyVaithya from '@/components/TinyVaithya'
 import { LensProvider } from '@/contexts/LensContext'
 import { AtmosphereProvider } from '@/contexts/AtmosphereContext'
 
@@ -49,6 +50,8 @@ export default function RootLayout({
               <CircadianBackground />
               {/* Wandering dharma wheel in background */}
               <WanderingDharmaWheel />
+              {/* Tiny Vaithya mascot - toggle with Alt+V */}
+              <TinyVaithya />
               {children}
               <Footer />
               {/* Debug panel - toggle with Alt+D */}

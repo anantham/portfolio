@@ -1,0 +1,494 @@
+/**
+ * Tiny Vaithya - State Machine
+ *
+ * Manages state transitions, behavior logic, and animation control.
+ * See docs/tiny-vaithya-behavior.md for behavior rules.
+ */
+
+import type {
+  VaithyaFullState,
+  VaithyaState,
+  VaithyaBehavior,
+  VaithyaEvent,
+  Position,
+  VaithyaAnimation,
+  VaithyaMood,
+} from './vaithya-types'
+import { COOLDOWNS, SPRITE_SIZE, WALK_SPEED } from './vaithya-types'
+
+export class VaithyaStateMachine {
+  private state: VaithyaFullState
+  private eventQueue: VaithyaEvent[] = []
+
+  constructor(initialPosition: Position = { x: 50, y: window.innerHeight - 100 }) {
+    this.state = {
+      state: 'IDLE',
+      mood: 'curious',
+      costume: 'none',
+      position: initialPosition,
+      targetPosition: null,
+      direction: 'right',
+      currentAnimation: 'idle',
+      frameIndex: 0,
+      lastFrameTime: Date.now(),
+      lastActionTime: Date.now(),
+      actionCooldowns: new Map(),
+      targetElementId: null,
+      isVisible: true,
+      isReducedMotion: false,
+    }
+  }
+
+  /**
+   * Get current state (read-only)
+   */
+  getState(): Readonly<VaithyaFullState> {
+    return { ...this.state }
+  }
+
+  /**
+   * Queue an event for processing
+   */
+  queueEvent(event: VaithyaEvent): void {
+    this.eventQueue.push(event)
+  }
+
+  /**
+   * Process all queued events and update state
+   */
+  update(deltaTime: number): void {
+    // Process events
+    while (this.eventQueue.length > 0) {
+      const event = this.eventQueue.shift()!
+      this.handleEvent(event)
+    }
+
+    // Update based on current state
+    this.updateState(deltaTime)
+
+    // Update animation frame
+    this.updateAnimation(deltaTime)
+
+    // Clean up expired cooldowns
+    this.cleanCooldowns()
+  }
+
+  /**
+   * Apply a behavior directive
+   */
+  applyBehavior(behavior: VaithyaBehavior): void {
+    // Check if action is on cooldown
+    const actionKey = behavior.action
+    if (this.isOnCooldown(actionKey)) {
+      return
+    }
+
+    // Apply the behavior
+    switch (behavior.action) {
+      case 'ENTER_SCENE':
+        this.enterScene(behavior.position)
+        break
+
+      case 'WALK_TO_ELEMENT':
+        this.walkToElement(behavior.targetId!, behavior.position)
+        break
+
+      case 'POINT_AT_ELEMENT':
+        this.pointAtElement(behavior.targetId!, behavior.position)
+        break
+
+      case 'SIT_ON_ELEMENT':
+        this.sitOnElement(behavior.targetId!, behavior.position)
+        break
+
+      case 'GO_TO_SLEEP':
+        this.goToSleep(behavior.position)
+        break
+
+      case 'WAKE_UP':
+        this.wakeUp()
+        break
+
+      case 'STAY_IDLE':
+        this.transitionTo('IDLE')
+        break
+
+      case 'STAY_OUT_OF_WAY':
+        this.stayOutOfWay()
+        break
+
+      case 'HIDE':
+        this.state.isVisible = false
+        break
+
+      case 'SHOW':
+        this.state.isVisible = true
+        break
+    }
+
+    // Apply mood and costume if specified
+    if (behavior.mood) {
+      this.state.mood = behavior.mood
+    }
+
+    if (behavior.costume) {
+      this.state.costume = behavior.costume
+    }
+
+    // Set cooldown
+    if (behavior.cooldown) {
+      this.setCooldown(actionKey, behavior.cooldown)
+    }
+  }
+
+  /**
+   * Set reduced motion mode
+   */
+  setReducedMotion(enabled: boolean): void {
+    this.state.isReducedMotion = enabled
+
+    if (enabled) {
+      // Stop all animations, show static idle
+      this.state.state = 'IDLE'
+      this.state.currentAnimation = 'idle'
+      this.state.frameIndex = 0
+      this.state.targetPosition = null
+    }
+  }
+
+  /**
+   * Toggle visibility
+   */
+  toggleVisibility(): void {
+    this.state.isVisible = !this.state.isVisible
+  }
+
+  // --- Private Methods ---
+
+  private handleEvent(event: VaithyaEvent): void {
+    switch (event.type) {
+      case 'REDUCED_MOTION_CHANGE':
+        this.setReducedMotion(event.payload.enabled)
+        break
+
+      case 'USER_IDLE':
+        if (!this.isOnCooldown('sleeping')) {
+          this.applyBehavior({
+            action: 'GO_TO_SLEEP',
+            cooldown: COOLDOWNS.sleeping,
+          })
+        }
+        break
+
+      case 'USER_ACTIVE':
+        if (this.state.state === 'SLEEPING') {
+          this.wakeUp()
+        }
+        break
+
+      case 'SCROLL_START':
+        // Store scroll state for fast scroller detection
+        break
+
+      case 'SCROLL_STOP':
+        // Resume normal behavior
+        break
+    }
+  }
+
+  private updateState(deltaTime: number): void {
+    if (this.state.isReducedMotion) {
+      return // No state updates in reduced motion
+    }
+
+    switch (this.state.state) {
+      case 'WALKING':
+        this.updateWalking(deltaTime)
+        break
+
+      case 'POINTING':
+        this.updatePointing()
+        break
+
+      case 'SITTING':
+        this.updateSitting()
+        break
+
+      case 'SLEEPING':
+        this.updateSleeping()
+        break
+
+      case 'IDLE':
+        this.updateIdle()
+        break
+    }
+  }
+
+  private updateWalking(deltaTime: number): void {
+    if (!this.state.targetPosition) {
+      this.transitionTo('IDLE')
+      return
+    }
+
+    const { x: currentX, y: currentY } = this.state.position
+    const { x: targetX, y: targetY } = this.state.targetPosition
+
+    const dx = targetX - currentX
+    const dy = targetY - currentY
+    const distance = Math.sqrt(dx * dx + dy * dy)
+
+    // Reached target?
+    if (distance < 5) {
+      this.state.position = this.state.targetPosition
+      this.state.targetPosition = null
+      this.transitionTo('IDLE')
+      return
+    }
+
+    // Move toward target
+    const moveDistance = (WALK_SPEED * deltaTime) / 1000
+    const ratio = moveDistance / distance
+    this.state.position = {
+      x: currentX + dx * ratio,
+      y: currentY + dy * ratio,
+    }
+
+    // Update direction
+    this.state.direction = dx > 0 ? 'right' : 'left'
+  }
+
+  private updatePointing(): void {
+    // Pointing is time-based, handled by animation completion
+  }
+
+  private updateSitting(): void {
+    // Check if target element is still visible
+    if (this.state.targetElementId) {
+      const element = document.getElementById(this.state.targetElementId)
+      if (!element || !this.isElementVisible(element)) {
+        this.transitionTo('IDLE')
+      }
+    }
+  }
+
+  private updateSleeping(): void {
+    // Sleeping continues until woken
+  }
+
+  private updateIdle(): void {
+    // Random blink every few seconds
+    if (Math.random() < 0.01) {
+      // 1% chance per frame (~60fps = blink every 1-2s)
+      this.playAnimationOnce('blink')
+    }
+  }
+
+  private updateAnimation(deltaTime: number): void {
+    // Animation frame timing is handled by the component
+    // This just tracks which animation should be playing
+    this.state.lastFrameTime = Date.now()
+  }
+
+  // --- Behavior Actions ---
+
+  private enterScene(position?: Position): void {
+    if (position) {
+      this.state.position = { x: -SPRITE_SIZE, y: position.y }
+      this.state.targetPosition = position
+    } else {
+      this.state.position = { x: -SPRITE_SIZE, y: window.innerHeight - 100 }
+      this.state.targetPosition = { x: 50, y: window.innerHeight - 100 }
+    }
+
+    this.transitionTo('WALKING')
+    this.setCooldown('walking', COOLDOWNS.walking)
+  }
+
+  private walkToElement(elementId: string, position?: Position): void {
+    this.state.targetElementId = elementId
+
+    if (position) {
+      this.state.targetPosition = position
+    } else {
+      const element = document.getElementById(elementId)
+      if (element) {
+        const rect = element.getBoundingClientRect()
+        this.state.targetPosition = {
+          x: rect.left - SPRITE_SIZE - 10,
+          y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
+        }
+      }
+    }
+
+    this.transitionTo('WALKING')
+    this.setCooldown('walking', COOLDOWNS.walking)
+  }
+
+  private pointAtElement(elementId: string, position?: Position): void {
+    this.state.targetElementId = elementId
+
+    // First walk to element, then point
+    this.walkToElement(elementId, position)
+
+    // Set up transition to pointing after reaching destination
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE' || this.state.state === 'SITTING') {
+        clearInterval(checkArrival)
+        this.transitionTo('POINTING')
+        this.setCooldown('pointing', COOLDOWNS.pointing)
+
+        // Auto-transition back to idle after pointing
+        setTimeout(() => {
+          if (this.state.state === 'POINTING') {
+            this.transitionTo('IDLE')
+          }
+        }, 2500)
+      }
+    }, 100)
+  }
+
+  private sitOnElement(elementId: string, position?: Position): void {
+    this.state.targetElementId = elementId
+
+    // Walk to element first
+    this.walkToElement(elementId, position)
+
+    // Set up transition to sitting after reaching destination
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE') {
+        clearInterval(checkArrival)
+        this.transitionTo('SITTING')
+      }
+    }, 100)
+  }
+
+  private goToSleep(position?: Position): void {
+    const sleepPosition = position || {
+      x: window.innerWidth - SPRITE_SIZE - 20,
+      y: window.innerHeight - SPRITE_SIZE - 20,
+    }
+
+    if (!position) {
+      // Walk to corner first
+      this.state.targetPosition = sleepPosition
+      this.transitionTo('WALKING')
+
+      // Transition to sleep on arrival
+      const checkArrival = setInterval(() => {
+        if (this.state.state === 'IDLE') {
+          clearInterval(checkArrival)
+          this.transitionTo('SLEEPING')
+        }
+      }, 100)
+    } else {
+      this.transitionTo('SLEEPING')
+    }
+  }
+
+  private wakeUp(): void {
+    if (this.state.state === 'SLEEPING') {
+      this.transitionTo('IDLE')
+    }
+  }
+
+  private stayOutOfWay(): void {
+    // Move to bottom-right corner
+    this.state.targetPosition = {
+      x: window.innerWidth - SPRITE_SIZE - 20,
+      y: window.innerHeight - SPRITE_SIZE - 20,
+    }
+    this.transitionTo('WALKING')
+
+    // Sit when arrived
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE') {
+        clearInterval(checkArrival)
+        this.transitionTo('SITTING')
+      }
+    }, 100)
+  }
+
+  // --- State Transitions ---
+
+  private transitionTo(newState: VaithyaState): void {
+    if (this.state.state === newState) {
+      return
+    }
+
+    this.state.state = newState
+    this.state.lastActionTime = Date.now()
+
+    // Set appropriate animation
+    switch (newState) {
+      case 'IDLE':
+        this.state.currentAnimation = 'idle'
+        break
+      case 'WALKING':
+        this.state.currentAnimation = 'walk'
+        break
+      case 'POINTING':
+        this.state.currentAnimation = this.state.direction === 'right' ? 'point_right' : 'point_right'
+        break
+      case 'SITTING':
+        this.state.currentAnimation = 'sit'
+        break
+      case 'SLEEPING':
+        this.state.currentAnimation = 'sleep'
+        break
+    }
+
+    this.state.frameIndex = 0
+  }
+
+  private playAnimationOnce(animation: VaithyaAnimation): void {
+    // Store current animation to restore after
+    const prevAnimation = this.state.currentAnimation
+    this.state.currentAnimation = animation
+    this.state.frameIndex = 0
+
+    // Restore after animation completes (rough timing)
+    setTimeout(() => {
+      if (this.state.currentAnimation === animation) {
+        this.state.currentAnimation = prevAnimation
+        this.state.frameIndex = 0
+      }
+    }, 500)
+  }
+
+  // --- Cooldown Management ---
+
+  private setCooldown(key: string, duration: number): void {
+    this.state.actionCooldowns.set(key, Date.now() + duration)
+  }
+
+  private isOnCooldown(key: string): boolean {
+    const cooldownEnd = this.state.actionCooldowns.get(key)
+    if (!cooldownEnd) return false
+    return Date.now() < cooldownEnd
+  }
+
+  private cleanCooldowns(): void {
+    const now = Date.now()
+    const toDelete: string[] = []
+
+    this.state.actionCooldowns.forEach((expiry, key) => {
+      if (now >= expiry) {
+        toDelete.push(key)
+      }
+    })
+
+    toDelete.forEach(key => this.state.actionCooldowns.delete(key))
+  }
+
+  // --- Helpers ---
+
+  private isElementVisible(element: HTMLElement): boolean {
+    const rect = element.getBoundingClientRect()
+    return (
+      rect.top >= 0 &&
+      rect.left >= 0 &&
+      rect.bottom <= window.innerHeight &&
+      rect.right <= window.innerWidth
+    )
+  }
+}
