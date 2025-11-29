@@ -1,13 +1,5 @@
-/**
- * Vaithya Sprite Renderer
- *
- * Renders Tiny Vaithya with CSS-based placeholder graphics.
- * Will be replaced with actual sprite sheet when pixel art is ready.
- */
-
 'use client'
 
-import { useEffect, useState } from 'react'
 import type { VaithyaAnimation, VaithyaDirection, VaithyaMood, VaithyaCostume } from '@/lib/vaithya-types'
 import { ANIMATION_SEQUENCES, SPRITE_SIZE } from '@/lib/vaithya-types'
 
@@ -16,9 +8,17 @@ interface VaithyaSpriteProps {
   frameIndex: number
   direction: VaithyaDirection
   mood: VaithyaMood
-  costume: VaithyaCostume  // v1.5
+  costume: VaithyaCostume
   color: string // From circadian theme
 }
+
+const HEAD_SIZE = 9
+const SHOULDER_Y = HEAD_SIZE
+const TORSO_LENGTH = 9
+const HIP_Y = SHOULDER_Y + TORSO_LENGTH
+const CENTER_X = SPRITE_SIZE / 2
+const THIGH_LENGTH = 6
+const SHIN_LENGTH = 5
 
 export default function VaithyaSprite({
   animation,
@@ -28,102 +28,50 @@ export default function VaithyaSprite({
   costume,
   color,
 }: VaithyaSpriteProps) {
-  const [blinkState, setBlinkState] = useState<'open' | 'closing' | 'closed'>('open')
+  const sequence = ANIMATION_SEQUENCES[animation]
+  const phase = sequence ? (frameIndex % sequence.frames.length) / sequence.frames.length : 0
+  const cycle = Math.sin(phase * Math.PI * 2)
+  const counterCycle = Math.sin(phase * Math.PI * 2 + Math.PI)
 
-  // Eye position based on animation (v1.5: added look_around)
-  const getEyePosition = () => {
-    switch (animation) {
-      case 'point_right':
-      case 'point_up':
-        return 'right'
-      case 'sleep':
-        return 'closed'
-      case 'look_around':
-        // Change based on frame
-        if (frameIndex === 1) return 'left'
-        if (frameIndex === 2) return 'right'
-        if (frameIndex === 3) return 'up'
-        return 'forward'
-      case 'stretch':
-        return frameIndex === 1 ? 'closed' : 'up'
-      case 'scratch_head':
-        return 'up'
-      default:
-        return 'forward'
-    }
-  }
-
-  // Eyebrow position based on mood and animation
-  const getEyebrowStyle = () => {
-    if (animation === 'sleep') {
-      return 'relaxed'
-    }
-
-    switch (mood) {
-      case 'playful':
-      case 'curious':
-        return 'raised'
-      case 'focused':
-        return 'angled'
-      case 'sleepy':
-        return 'relaxed'
-      default:
-        return 'neutral'
-    }
-  }
-
-  const eyePosition = getEyePosition()
-  const eyebrowStyle = getEyebrowStyle()
   const isFlipped = direction === 'left'
+  const isWalking = animation === 'walk'
+  const isSitting = animation === 'sit'
+  const isSleeping = animation === 'sleep'
+  const isStretching = animation === 'stretch'
+  const isPointing = animation === 'point_right' || animation === 'point_up'
+  const isClimbing = animation === 'climb'
+  const isPeeking = animation === 'peek'
 
-  // Animation-specific transforms (v1.5: added new animations)
-  const getBodyTransform = () => {
-    let transform = ''
+  const bodyBob = (isWalking ? cycle * 1.5 : 0) + (isSitting ? 3 : 0)
+  const torsoLean = isWalking ? cycle * 3 : isPointing ? 4 : isStretching ? -4 : isClimbing ? -3 : 0
+  const headTilt = isSleeping ? 12 : animation === 'look_around' ? (frameIndex % 4 - 1.5) * 4 : 0
 
-    // Flip for left direction
-    if (isFlipped) {
-      transform += 'scaleX(-1) '
-    }
+  // Arms and legs swing in opposing cycles for a stick-figure gait
+  const frontArmUpper = isStretching ? -115 : isPointing ? (animation === 'point_up' ? -130 : -45) : isClimbing ? -40 : isWalking ? -counterCycle * 22 : -8
+  const frontArmLower = isStretching ? -5 : isPointing ? (animation === 'point_up' ? -10 : -5) : isClimbing ? -15 : isWalking ? frontArmUpper * 0.5 : 0
+  const backArmUpper = isStretching ? 115 : isClimbing ? 30 : isWalking ? -frontArmUpper * 0.6 : 10
+  const backArmLower = isStretching ? 10 : isClimbing ? 5 : isWalking ? backArmUpper * 0.4 : 0
 
-    // Animation-specific
-    switch (animation) {
-      case 'walk':
-        const walkBob = frameIndex % 2 === 0 ? -1 : 1
-        transform += `translateY(${walkBob}px) `
-        break
+  const frontLegUpper = isWalking ? cycle * 24 : isSitting ? -80 : isSleeping ? -20 : isClimbing ? -30 : 0
+  const backLegUpper = isWalking ? counterCycle * 24 : isSitting ? -55 : isSleeping ? 10 : isClimbing ? 25 : 0
+  const frontLegLower = isWalking ? -12 - Math.max(0, cycle) * 10 : isSitting ? 38 : isSleeping ? 12 : isClimbing ? 12 : 0
+  const backLegLower = isWalking ? -12 - Math.max(0, counterCycle) * 10 : isSitting ? 25 : isSleeping ? 6 : isClimbing ? 8 : 0
+  const kneeLiftFront = isWalking ? -Math.max(0, cycle) * 3 : isClimbing ? -4 : isSitting ? -1 : 0
+  const kneeLiftBack = isWalking ? -Math.max(0, counterCycle) * 3 : isClimbing ? -2 : isSitting ? -1 : 0
+  const footSpread = isSitting ? 5 : 0
 
-      case 'sit':
-        transform += 'translateY(4px) scaleY(0.9) '
-        break
+  const eyePosition = getEyePosition(animation, frameIndex)
+  const eyebrowStyle = getEyebrowStyle(animation, mood)
+  const eyesClosed = animation === 'sleep' || animation === 'blink' || eyePosition === 'closed'
 
-      case 'sleep':
-        transform += 'rotate(90deg) translateX(8px) '
-        break
-
-      case 'stretch':
-        // Slight stretch up
-        transform += `scaleY(${1 + frameIndex * 0.05}) `
-        break
-
-      case 'scratch_head':
-        // Slight head tilt
-        transform += `rotate(${frameIndex === 1 ? -5 : 0}deg) `
-        break
-
-      case 'climb':
-        // Vertical bobbing while climbing
-        const climbBob = (frameIndex % 2 === 0 ? -2 : 2)
-        transform += `translateY(${climbBob}px) `
-        break
-
-      case 'peek':
-        // Only half visible (simulate peeking from edge)
-        transform += 'translateX(-16px) '
-        break
-    }
-
-    return transform
-  }
+  const figureTransform = [
+    isFlipped ? 'scaleX(-1)' : '',
+    isSleeping ? 'rotate(90deg) translateX(6px)' : '',
+    isPeeking ? 'translateX(-8px)' : '',
+    `translateY(${bodyBob}px)`,
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div
@@ -131,231 +79,303 @@ export default function VaithyaSprite({
       style={{
         width: SPRITE_SIZE,
         height: SPRITE_SIZE,
-        transform: getBodyTransform(),
+        transform: figureTransform,
         transition: 'transform 0.2s ease-out',
       }}
     >
-      {/* Body */}
       <div
         className="absolute"
         style={{
-          width: 20,
-          height: 24,
-          left: 6,
-          top: 8,
-          backgroundColor: color,
-          borderRadius: '40% 40% 45% 45% / 50% 50% 40% 40%',
-          border: `1px solid ${color}`,
-          filter: 'brightness(0.95)',
-        }}
-      />
-
-      {/* Head */}
-      <div
-        className="absolute"
-        style={{
-          width: 16,
-          height: 16,
-          left: 8,
-          top: 2,
-          backgroundColor: color,
-          borderRadius: '50%',
-          border: `1px solid ${color}`,
+          inset: 0,
+          transform: `rotate(${torsoLean}deg)`,
+          transformOrigin: '50% 70%',
         }}
       >
-        {/* Eyes (v1.5: added up/left positions) */}
-        {eyePosition !== 'closed' && (
-          <>
-            <div
-              className="absolute"
-              style={{
-                width: 3,
-                height: 3,
-                left: eyePosition === 'right' ? 5 : eyePosition === 'left' ? 2 : 4,
-                top: eyePosition === 'up' ? 5 : 6,
-                backgroundColor: '#000',
-                borderRadius: '50%',
-              }}
-            />
-            <div
-              className="absolute"
-              style={{
-                width: 3,
-                height: 3,
-                left: eyePosition === 'right' ? 10 : eyePosition === 'left' ? 7 : 9,
-                top: eyePosition === 'up' ? 5 : 6,
-                backgroundColor: '#000',
-                borderRadius: '50%',
-              }}
-            />
-          </>
-        )}
-
-        {/* Eyebrows */}
-        {eyePosition !== 'closed' && (
-          <>
-            <div
-              className="absolute"
-              style={{
-                width: 4,
-                height: 1,
-                left: 3,
-                top: eyebrowStyle === 'raised' ? 4 : eyebrowStyle === 'angled' ? 5 : 5,
-                backgroundColor: '#000',
-                borderRadius: '2px',
-                transform: eyebrowStyle === 'angled' ? 'rotate(-10deg)' : 'none',
-              }}
-            />
-            <div
-              className="absolute"
-              style={{
-                width: 4,
-                height: 1,
-                left: 9,
-                top: eyebrowStyle === 'raised' ? 4 : eyebrowStyle === 'angled' ? 5 : 5,
-                backgroundColor: '#000',
-                borderRadius: '2px',
-                transform: eyebrowStyle === 'angled' ? 'rotate(10deg)' : 'none',
-              }}
-            />
-          </>
+        <Torso color={color} />
+        <Arm x={CENTER_X + 3} upper={frontArmUpper} lower={frontArmLower} color={color} />
+        <Arm x={CENTER_X - 3} upper={backArmUpper} lower={backArmLower} color={color} />
+        <Leg
+          x={CENTER_X + 2 + footSpread}
+          lift={kneeLiftFront}
+          upper={frontLegUpper}
+          lower={frontLegLower}
+          color={color}
+        />
+        <Leg
+          x={CENTER_X - 2 - footSpread}
+          lift={kneeLiftBack}
+          upper={backLegUpper}
+          lower={backLegLower}
+          color={color}
+        />
+        <Head
+          color={color}
+          eyebrowStyle={eyebrowStyle}
+          eyePosition={eyesClosed ? 'closed' : eyePosition}
+          headTilt={headTilt}
+          isSleeping={isSleeping}
+        />
+        {costume !== 'none' && (
+          <Costume costume={costume} color={color} centerX={CENTER_X} headSize={HEAD_SIZE} />
         )}
       </div>
 
-      {/* Arms (for pointing animation) */}
-      {animation.startsWith('point') && (
-        <div
-          className="absolute"
-          style={{
-            width: 2,
-            height: 10,
-            left: animation === 'point_right' ? 22 : 15,
-            top: animation === 'point_up' ? 10 : 14,
-            backgroundColor: color,
-            borderRadius: '2px',
-            transform: animation === 'point_right' ? 'rotate(-45deg)' : 'rotate(-90deg)',
-            transformOrigin: 'top center',
-          }}
-        />
-      )}
-
-      {/* Legs (visible in walk/sit) */}
-      {(animation === 'walk' || animation === 'sit') && (
-        <>
-          <div
-            className="absolute"
-            style={{
-              width: 2,
-              height: 6,
-              left: 10,
-              top: animation === 'sit' ? 28 : 28,
-              backgroundColor: color,
-              borderRadius: '2px',
-              transform: animation === 'walk' ? `translateX(${frameIndex % 2 === 0 ? -1 : 1}px)` : 'none',
-            }}
-          />
-          <div
-            className="absolute"
-            style={{
-              width: 2,
-              height: 6,
-              left: 14,
-              top: animation === 'sit' ? 28 : 28,
-              backgroundColor: color,
-              borderRadius: '2px',
-              transform: animation === 'walk' ? `translateX(${frameIndex % 2 === 0 ? 1 : -1}px)` : 'none',
-            }}
-          />
-        </>
-      )}
-
-      {/* Sleep Z particles */}
-      {animation === 'sleep' && (
-        <SleepParticles />
-      )}
-
-      {/* v1.5: Arms for new animations */}
-      {animation === 'scratch_head' && frameIndex > 0 && (
-        <div
-          className="absolute"
-          style={{
-            width: 2,
-            height: 8,
-            left: 20,
-            top: 6,
-            backgroundColor: color,
-            borderRadius: '2px',
-            transform: 'rotate(-30deg)',
-            transformOrigin: 'top center',
-          }}
-        />
-      )}
-
-      {animation === 'stretch' && frameIndex > 0 && (
-        <>
-          <div
-            className="absolute"
-            style={{
-              width: 2,
-              height: 10,
-              left: 4,
-              top: 6,
-              backgroundColor: color,
-              borderRadius: '2px',
-              transform: frameIndex === 1 ? 'rotate(-110deg)' : 'rotate(-45deg)',
-              transformOrigin: 'bottom center',
-            }}
-          />
-          <div
-            className="absolute"
-            style={{
-              width: 2,
-              height: 10,
-              left: 22,
-              top: 6,
-              backgroundColor: color,
-              borderRadius: '2px',
-              transform: frameIndex === 1 ? 'rotate(110deg)' : 'rotate(45deg)',
-              transformOrigin: 'bottom center',
-            }}
-          />
-        </>
-      )}
-
-      {animation === 'climb' && (
-        <div
-          className="absolute"
-          style={{
-            width: 2,
-            height: 8,
-            left: frameIndex % 2 === 0 ? 6 : 20,
-            top: 4,
-            backgroundColor: color,
-            borderRadius: '2px',
-            transform: 'rotate(-90deg)',
-          }}
-        />
-      )}
-
-      {/* v1.5: Costumes (hats) */}
-      {costume !== 'none' && <Costume costume={costume} color={color} />}
+      {animation === 'sleep' && <SleepParticles />}
     </div>
   )
 }
 
-// v1.5: Costume component
-function Costume({ costume, color }: { costume: VaithyaCostume; color: string }) {
+function Torso({ color }: { color: string }) {
+  return (
+    <div
+      className="absolute"
+      style={{
+        width: 2,
+        height: TORSO_LENGTH,
+        left: CENTER_X,
+        top: SHOULDER_Y,
+        backgroundColor: color,
+        borderRadius: 4,
+        transform: 'translate(-50%, 0)',
+      }}
+    />
+  )
+}
+
+function Arm({
+  x,
+  upper,
+  lower,
+  color,
+  y = SHOULDER_Y,
+}: {
+  x: number
+  upper: number
+  lower: number
+  color: string
+  y?: number
+}) {
+  return (
+    <div
+      className="absolute"
+      style={{
+        left: x,
+        top: y,
+        transform: `translate(-50%, 0) rotate(${upper}deg)`,
+        transformOrigin: '50% 0%',
+      }}
+    >
+      <div
+        style={{
+          width: 2,
+          height: 6,
+          backgroundColor: color,
+          borderRadius: 2,
+        }}
+      />
+      <div
+        style={{
+          width: 2,
+          height: 5,
+          backgroundColor: color,
+          borderRadius: 2,
+          transform: `translateY(6px) rotate(${lower}deg)`,
+          transformOrigin: '50% 0%',
+        }}
+      />
+    </div>
+  )
+}
+
+function Leg({
+  x,
+  upper,
+  lower,
+  lift,
+  color,
+  y = HIP_Y,
+}: {
+  x: number
+  upper: number
+  lower: number
+  lift: number
+  color: string
+  y?: number
+}) {
+  return (
+    <div
+      className="absolute"
+      style={{
+        left: x,
+        top: y + lift,
+        transform: `translate(-50%, 0) rotate(${upper}deg)`,
+        transformOrigin: '50% 0%',
+      }}
+    >
+      <div
+        style={{
+          width: 2,
+          height: THIGH_LENGTH,
+          backgroundColor: color,
+          borderRadius: 2,
+          boxShadow: '0 0 2px rgba(0,0,0,0.12)',
+        }}
+      />
+      <div
+        style={{
+          width: 2,
+          height: SHIN_LENGTH,
+          backgroundColor: color,
+          borderRadius: 2,
+          transform: `translateY(${THIGH_LENGTH}px) rotate(${lower}deg)`,
+          transformOrigin: '50% 0%',
+          boxShadow: '0 0 2px rgba(0,0,0,0.12)',
+        }}
+      />
+      <div
+        style={{
+          width: 4,
+          height: 2,
+          backgroundColor: color,
+          borderRadius: 2,
+          transform: `translate(-1px, ${THIGH_LENGTH + SHIN_LENGTH}px)`,
+          boxShadow: '0 0 2px rgba(0,0,0,0.12)',
+        }}
+      />
+    </div>
+  )
+}
+
+function Head({
+  color,
+  eyebrowStyle,
+  eyePosition,
+  headTilt,
+  isSleeping,
+}: {
+  color: string
+  eyebrowStyle: string
+  eyePosition: 'forward' | 'left' | 'right' | 'up' | 'closed'
+  headTilt: number
+  isSleeping: boolean
+}) {
+  const baseLeft = CENTER_X - (HEAD_SIZE + 2) / 2
+  const eyeY = eyePosition === 'up' ? 3 : 4
+  const leftEyeX = eyePosition === 'right' ? 5 : eyePosition === 'left' ? 3 : 4
+  const rightEyeX = eyePosition === 'right' ? 9 : eyePosition === 'left' ? 7 : 8
+
+  return (
+    <div
+      className="absolute"
+      style={{
+        width: HEAD_SIZE + 2,
+        height: HEAD_SIZE + 2,
+        left: baseLeft,
+        top: 0,
+        borderRadius: '50%',
+        border: `2px solid ${color}`,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        transform: `rotate(${headTilt}deg)`,
+        transformOrigin: '50% 100%',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+      }}
+    >
+      {eyePosition !== 'closed' && (
+        <>
+          <div
+            className="absolute"
+            style={{
+              width: 2,
+              height: 2,
+              left: leftEyeX,
+              top: eyeY,
+              backgroundColor: '#0f172a',
+              borderRadius: '50%',
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              width: 2,
+              height: 2,
+              left: rightEyeX,
+              top: eyeY,
+              backgroundColor: '#0f172a',
+              borderRadius: '50%',
+            }}
+          />
+        </>
+      )}
+
+      {eyePosition === 'closed' && (
+        <div
+          className="absolute left-1/2"
+          style={{
+            width: 8,
+            height: 1,
+            backgroundColor: '#0f172a',
+            top: eyeY + 1,
+            transform: 'translateX(-50%)',
+            borderRadius: 2,
+          }}
+        />
+      )}
+
+      {!isSleeping && eyePosition !== 'closed' && (
+        <>
+          <div
+            className="absolute"
+            style={{
+              width: 5,
+              height: 1,
+              left: leftEyeX - 1,
+              top: eyebrowStyle === 'raised' ? eyeY - 2 : eyeY - 1,
+              backgroundColor: '#0f172a',
+              borderRadius: 2,
+              transform: eyebrowStyle === 'angled' ? 'rotate(-10deg)' : 'none',
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              width: 5,
+              height: 1,
+              left: rightEyeX - 1,
+              top: eyebrowStyle === 'raised' ? eyeY - 2 : eyeY - 1,
+              backgroundColor: '#0f172a',
+              borderRadius: 2,
+              transform: eyebrowStyle === 'angled' ? 'rotate(10deg)' : 'none',
+            }}
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+function Costume({
+  costume,
+  color,
+  centerX,
+  headSize,
+}: {
+  costume: VaithyaCostume
+  color: string
+  centerX: number
+  headSize: number
+}) {
   switch (costume) {
-    case 'builder_hat':
+    case 'builder_hat': {
+      const width = headSize + 4
       return (
         <div
           className="absolute"
           style={{
-            width: 12,
-            height: 6,
-            left: 10,
-            top: 0,
-            backgroundColor: '#fbbf24', // Yellow
+            width,
+            height: 5,
+            left: centerX - width / 2,
+            top: -2,
+            backgroundColor: '#fbbf24',
             borderRadius: '4px 4px 0 0',
             border: '1px solid #f59e0b',
           }}
@@ -363,7 +383,7 @@ function Costume({ costume, color }: { costume: VaithyaCostume; color: string })
           <div
             className="absolute"
             style={{
-              width: 16,
+              width: width + 4,
               height: 2,
               left: -2,
               bottom: -1,
@@ -373,23 +393,26 @@ function Costume({ costume, color }: { costume: VaithyaCostume; color: string })
           />
         </div>
       )
+    }
 
-    case 'monk_robe':
+    case 'monk_robe': {
+      const width = headSize + 6
       return (
         <div
           className="absolute"
           style={{
-            width: 18,
-            height: 10,
-            left: 7,
+            width,
+            height: 8,
+            left: centerX - width / 2,
             top: 1,
-            backgroundColor: '#f97316', // Orange
+            backgroundColor: '#f97316',
             borderRadius: '8px 8px 0 0',
             opacity: 0.9,
             border: '1px solid #ea580c',
           }}
         />
       )
+    }
 
     case 'wizard_cap':
       return (
@@ -398,11 +421,11 @@ function Costume({ costume, color }: { costume: VaithyaCostume; color: string })
           style={{
             width: 0,
             height: 0,
-            left: 12,
+            left: centerX - 3,
             top: -6,
             borderLeft: '6px solid transparent',
             borderRight: '6px solid transparent',
-            borderBottom: '10px solid #3b82f6', // Blue
+            borderBottom: '10px solid #3b82f6',
             transform: 'rotate(10deg)',
           }}
         >
@@ -429,12 +452,12 @@ function Costume({ costume, color }: { costume: VaithyaCostume; color: string })
               className="absolute"
               style={{
                 width: 4,
-                height: 6,
-                left: 8 + i * 4,
-                top: 0,
-                backgroundColor: '#22c55e', // Green
+                height: 5,
+                left: centerX - 6 + i * 4,
+                top: -1,
+                backgroundColor: '#22c55e',
                 borderRadius: '2px 2px 0 0',
-                transform: `rotate(${(i - 1) * 15}deg)`,
+                transform: `rotate(${(i - 1) * 12}deg)`,
               }}
             />
           ))}
@@ -478,4 +501,46 @@ function SleepParticles() {
       `}</style>
     </div>
   )
+}
+
+function getEyePosition(
+  animation: VaithyaAnimation,
+  frameIndex: number
+): 'forward' | 'left' | 'right' | 'up' | 'closed' {
+  switch (animation) {
+    case 'point_right':
+    case 'point_up':
+      return 'right' as const
+    case 'sleep':
+      return 'closed' as const
+    case 'look_around':
+      if (frameIndex === 1) return 'left'
+      if (frameIndex === 2) return 'right'
+      if (frameIndex === 3) return 'up'
+      return 'forward'
+    case 'stretch':
+      return frameIndex === 1 ? 'closed' : 'up'
+    case 'scratch_head':
+      return 'up'
+    default:
+      return 'forward'
+  }
+}
+
+function getEyebrowStyle(animation: VaithyaAnimation, mood: VaithyaMood) {
+  if (animation === 'sleep') {
+    return 'relaxed'
+  }
+
+  switch (mood) {
+    case 'playful':
+    case 'curious':
+      return 'raised'
+    case 'focused':
+      return 'angled'
+    case 'sleepy':
+      return 'relaxed'
+    default:
+      return 'neutral'
+  }
 }
