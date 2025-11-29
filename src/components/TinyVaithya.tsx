@@ -13,7 +13,7 @@ import { useLens } from '@/contexts/LensContext'
 import { VaithyaStateMachine } from '@/lib/vaithya-state-machine'
 import VaithyaSprite from './VaithyaSprite'
 import type { VaithyaBehavior, VaithyaCostume, VaithyaMood } from '@/lib/vaithya-types'
-import { ANIMATION_SEQUENCES } from '@/lib/vaithya-types'
+import { ANIMATION_SEQUENCES, SPRITE_SIZE } from '@/lib/vaithya-types'
 
 export default function TinyVaithya() {
   const {
@@ -32,11 +32,14 @@ export default function TinyVaithya() {
   const stateMachineRef = useRef<VaithyaStateMachine | null>(null)
   const frameRef = useRef<number>(0)
   const lastUpdateRef = useRef<number>(Date.now())
+  const latestStateRef = useRef<ReturnType<VaithyaStateMachine['getState']> | null>(null)
 
   // Initialize state machine
   useEffect(() => {
     stateMachineRef.current = new VaithyaStateMachine()
-    setVaithyaState(stateMachineRef.current.getState())
+    const initialState = stateMachineRef.current.getState()
+    latestStateRef.current = initialState
+    setVaithyaState(initialState)
 
     // Handle reduced motion
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -48,7 +51,9 @@ export default function TinyVaithya() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && e.key.toLowerCase() === 'v') {
         stateMachineRef.current?.toggleVisibility()
-        setVaithyaState(stateMachineRef.current!.getState())
+        const newState = stateMachineRef.current!.getState()
+        latestStateRef.current = newState
+        setVaithyaState(newState)
       }
     }
 
@@ -86,7 +91,9 @@ export default function TinyVaithya() {
       lastUpdateRef.current = now
 
       stateMachineRef.current.update(deltaTime)
-      setVaithyaState(stateMachineRef.current.getState())
+      const newState = stateMachineRef.current.getState()
+      latestStateRef.current = newState
+      setVaithyaState(newState)
 
       frameRef.current = requestAnimationFrame(animate)
     }
@@ -121,7 +128,9 @@ export default function TinyVaithya() {
       if (lastPos) {
         // Start where they left off - recreate state machine with saved position
         stateMachineRef.current = new VaithyaStateMachine(lastPos)
-        setVaithyaState(stateMachineRef.current.getState())
+        const restoredState = stateMachineRef.current.getState()
+        latestStateRef.current = restoredState
+        setVaithyaState(restoredState)
       }
 
       stateMachineRef.current.applyBehavior({
@@ -255,6 +264,61 @@ export default function TinyVaithya() {
       })
     }
   }, [behavior.scrollSpeed])
+
+  // v3.5: Gentle scroll resistance when Vaithya is near the top
+  useEffect(() => {
+    if (!stateMachineRef.current) return
+
+    let shakeTimeout: NodeJS.Timeout | null = null
+    const cooldownRef = { current: 0 }
+
+    const handleWheel = (e: WheelEvent) => {
+      const state = latestStateRef.current
+      if (!state || state.isReducedMotion) return
+      if (uiComplexity === 'minimal') return
+
+      const now = Date.now()
+      if (now < cooldownRef.current) return
+
+      const nearTop = state.position.y < 140
+      const scrollingDown = e.deltaY > 0
+      const playful = state.mood === 'playful' || state.mood === 'curious'
+
+      if (!nearTop || !scrollingDown || !playful) return
+
+      cooldownRef.current = now + 2500
+      stateMachineRef.current?.playOneShotAnimation('stretch')
+
+      // Haptic hint (if supported)
+      try {
+        if (navigator.vibrate) {
+          navigator.vibrate(35)
+        }
+      } catch {
+        // ignore
+      }
+
+      // Resist the scroll a bit
+      e.preventDefault()
+      window.scrollBy({ top: e.deltaY * 0.3, behavior: 'auto' })
+
+      // Tiny shake to feel the brace
+      document.body.style.transition = 'transform 120ms ease-out'
+      document.body.style.transform = 'translateY(-2px)'
+      if (shakeTimeout) clearTimeout(shakeTimeout)
+      shakeTimeout = setTimeout(() => {
+        document.body.style.transform = ''
+      }, 140)
+    }
+
+    window.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel as any)
+      if (shakeTimeout) clearTimeout(shakeTimeout)
+      document.body.style.transform = ''
+    }
+  }, [uiComplexity])
 
   // v2.0: Context-aware mood system
   useEffect(() => {
@@ -473,21 +537,30 @@ export default function TinyVaithya() {
     if (uiComplexity === 'minimal') return // Respect minimal UI
 
     const discoverProjects = () => {
-      // Find all project cards and sections
+      // Find project cards, sections, and other interactables
       const projectElements = [
         ...Array.from(document.querySelectorAll('[data-project-id]')),
         ...Array.from(document.querySelectorAll('[id$="-section"]')),
+        ...Array.from(document.querySelectorAll('[data-vaithya-role]')),
       ] as HTMLElement[]
 
       if (projectElements.length === 0) return
 
-      // Score each element by novelty
       const scoredElements = projectElements
         .map(el => {
-          const id = el.id || el.getAttribute('data-project-id') || ''
-          const novelty = getNovelty(id)
+          const role = el.getAttribute('data-vaithya-role') || ''
+          const id = el.id || el.getAttribute('data-project-id') || role || ''
+          const novelty = role === 'wheel' ? 1 : id ? getNovelty(id) : 0.6
           const rect = el.getBoundingClientRect()
           const isVisible = rect.top < window.innerHeight && rect.bottom > 0
+          const isProjectCard = el.hasAttribute('data-project-id')
+          const isSection = id.endsWith('-section')
+
+          const score =
+            novelty +
+            (isProjectCard ? 0.3 : 0) +
+            (role === 'wheel' ? 0.5 : 0) +
+            (isSection ? 0.1 : 0)
 
           return {
             element: el,
@@ -495,50 +568,62 @@ export default function TinyVaithya() {
             novelty,
             isVisible,
             rect,
+            role,
+            isProjectCard,
+            isSection,
+            score,
           }
         })
-        .filter(item => item.isVisible && item.novelty > 0.5) // Only novel items
-        .sort((a, b) => b.novelty - a.novelty) // Highest novelty first
+        .filter(item => item.isVisible)
+        .sort((a, b) => b.score - a.score)
 
-      // Choose behavior based on element type and novelty
-      if (scoredElements.length > 0) {
-        const target = scoredElements[0]
-        const isProjectCard = target.element.hasAttribute('data-project-id')
-        const isSection = target.id.endsWith('-section')
+      if (scoredElements.length === 0) return
 
-        setTimeout(() => {
-          // v2.5: Different behaviors for different elements
-          if (isProjectCard && target.novelty > 0.9 && familiarityLevel !== 'newcomer') {
-            // Highly novel project card + not first visit = climb on it!
-            stateMachineRef.current?.applyBehavior({
-              action: 'CLIMB_ON_ELEMENT',
-              targetId: target.id,
-              mood: 'playful',
-              cooldown: 20000,
-            })
-          } else if (isSection && memory.visitCount === 1) {
-            // First visit to new section = peek first
-            stateMachineRef.current?.applyBehavior({
-              action: 'PEEK_AT_ELEMENT',
-              targetId: target.id,
-              mood: 'curious',
-              cooldown: 15000,
-            })
-          } else {
-            // Default: just point
-            stateMachineRef.current?.applyBehavior({
-              action: 'POINT_AT_ELEMENT',
-              targetId: target.id,
-              position: {
-                x: Math.max(20, target.rect.left - 50),
-                y: target.rect.top + target.rect.height / 2 - 16,
-              },
-              mood: target.novelty > 0.8 ? 'curious' : 'playful',
-              cooldown: 15000,
-            })
-          }
-        }, 2000)
-      }
+      const target = scoredElements[0]
+      const { rect } = target
+      const shouldClimbCard = target.isProjectCard && target.novelty >= 0.6 && familiarityLevel !== 'newcomer'
+      const shouldPeekSection = target.isSection && memory.visitCount === 1
+      const shouldPushWheel = target.role === 'wheel' && familiarityLevel !== 'newcomer'
+
+      setTimeout(() => {
+        if (shouldPushWheel) {
+          stateMachineRef.current?.applyBehavior({
+            action: 'PUSH_ELEMENT',
+            targetId: target.id || 'dharma-wheel',
+            position: {
+              x: rect.left - SPRITE_SIZE + 8,
+              y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
+            },
+            mood: 'playful',
+            cooldown: 20000,
+          })
+        } else if (shouldClimbCard) {
+          stateMachineRef.current?.applyBehavior({
+            action: 'CLIMB_ON_ELEMENT',
+            targetId: target.id,
+            mood: 'playful',
+            cooldown: 18000,
+          })
+        } else if (shouldPeekSection) {
+          stateMachineRef.current?.applyBehavior({
+            action: 'PEEK_AT_ELEMENT',
+            targetId: target.id,
+            mood: 'curious',
+            cooldown: 15000,
+          })
+        } else {
+          stateMachineRef.current?.applyBehavior({
+            action: 'POINT_AT_ELEMENT',
+            targetId: target.id,
+            position: {
+              x: Math.max(20, rect.left - 50),
+              y: rect.top + rect.height / 2 - 16,
+            },
+            mood: target.novelty > 0.8 ? 'curious' : 'playful',
+            cooldown: 12000,
+          })
+        }
+      }, 2000)
     }
 
     // Check on initial render and when seen nodes change

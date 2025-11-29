@@ -107,7 +107,11 @@ export default function ProjectsShowcase() {
               viewport={{ once: true }}
               className="relative"
             >
-              <div className={`glass-card p-8 md:p-12 rounded-3xl bg-gradient-to-br ${project.gradient} border border-zen-700/50`}>
+              <div
+                id={`${project.id}-card`}
+                data-project-id={project.id}
+                className={`glass-card p-8 md:p-12 rounded-3xl bg-gradient-to-br ${project.gradient} border border-zen-700/50`}
+              >
                 <div className="flex flex-col lg:flex-row items-start lg:items-center gap-8">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-4">
@@ -208,6 +212,8 @@ export default function ProjectsShowcase() {
                   viewport={{ once: true }}
                 >
                   <motion.div
+                    id={`${project.id}-card`}
+                    data-project-id={project.id}
                     whileHover={{ scale: 1.02, y: -5 }}
                     className={`glass-card p-6 rounded-2xl h-full bg-gradient-to-br ${project.gradient} border border-zen-700/50 hover:border-zen-600/70 transition-all duration-300`}
                   >

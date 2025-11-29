@@ -100,6 +100,7 @@ export type VaithyaAction =
   | 'PEEK_AT_ELEMENT'     // v2.5
   | 'WANDER'              // v3.0
   | 'FOLLOW_CURSOR'       // v3.0
+  | 'PUSH_ELEMENT'        // v3.5
   | 'GO_TO_SLEEP'
   | 'WAKE_UP'
   | 'STAY_IDLE'
@@ -277,6 +278,7 @@ export const COOLDOWNS = {
   walking: 3000,
   sectionHighlight: 30000,
   sleeping: 60000,
+  pushing: 12000,
   stateTransition: 500,
 } as const
 

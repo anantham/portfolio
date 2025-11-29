@@ -143,6 +143,8 @@ export default function WanderingDharmaWheel({
         style={{ zIndex: 0 }}
       />
       <motion.div
+        id="dharma-wheel"
+        data-vaithya-role="wheel"
         className="fixed pointer-events-none select-none"
         style={{
           left: clampedX - wheelSize / 2,

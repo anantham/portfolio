@@ -14,7 +14,7 @@ import type {
   VaithyaAnimation,
   VaithyaMood,
 } from './vaithya-types'
-import { COOLDOWNS, SPRITE_SIZE, WALK_SPEED } from './vaithya-types'
+import { ANIMATION_SEQUENCES, COOLDOWNS, SPRITE_SIZE, WALK_SPEED } from './vaithya-types'
 
 export class VaithyaStateMachine {
   private state: VaithyaFullState
@@ -118,6 +118,10 @@ export class VaithyaStateMachine {
 
       case 'FOLLOW_CURSOR':
         this.followCursor(behavior.position)
+        break
+
+      case 'PUSH_ELEMENT':
+        this.pushElement(behavior.targetId!, behavior.position)
         break
 
       case 'GO_TO_SLEEP':
@@ -306,6 +310,12 @@ export class VaithyaStateMachine {
       Math.pow(target.x - start.x, 2) + Math.pow(target.y - start.y, 2)
     )
 
+    if (straightDist < 1) {
+      this.state.position = { ...target }
+      this.finishWalking()
+      return
+    }
+
     // Advance progress based on speed
     const progressDelta = (WALK_SPEED * deltaTime) / (1000 * straightDist)
     this.state.pathProgress = Math.min(1, this.state.pathProgress + progressDelta)
@@ -322,6 +332,8 @@ export class VaithyaStateMachine {
                  2 * oneMinusT * t * control.y +
                  t * t * target.y
 
+    const previousPosition = { ...this.state.position }
+
     // v2.5: Enforce spatial boundaries
     this.state.position = {
       x: Math.max(0, Math.min(window.innerWidth - SPRITE_SIZE, newX)),
@@ -329,17 +341,15 @@ export class VaithyaStateMachine {
     }
 
     // Update direction based on movement
-    const dx = newX - (this.state.position.x || 0)
-    this.state.direction = dx > 0 ? 'right' : 'left'
+    const dx = this.state.position.x - previousPosition.x
+    if (Math.abs(dx) > 0.1) {
+      this.state.direction = dx > 0 ? 'right' : 'left'
+    }
 
     // Reached target?
     if (this.state.pathProgress >= 1) {
       this.state.position = this.state.targetPosition
-      this.state.targetPosition = null
-      this.state.pathStartPosition = null
-      this.state.pathControlPoint = null
-      this.state.pathProgress = 0
-      this.transitionTo('IDLE')
+      this.finishWalking()
     }
   }
 
@@ -384,9 +394,24 @@ export class VaithyaStateMachine {
   }
 
   private updateAnimation(deltaTime: number): void {
-    // Animation frame timing is handled by the component
-    // This just tracks which animation should be playing
-    this.state.lastFrameTime = Date.now()
+    const sequence = ANIMATION_SEQUENCES[this.state.currentAnimation]
+    if (!sequence) return
+
+    const now = Date.now()
+    let elapsed = now - this.state.lastFrameTime
+
+    while (elapsed >= sequence.frames[this.state.frameIndex % sequence.frames.length].duration) {
+      elapsed -= sequence.frames[this.state.frameIndex % sequence.frames.length].duration
+
+      if (sequence.loop) {
+        this.state.frameIndex = (this.state.frameIndex + 1) % sequence.frames.length
+      } else {
+        this.state.frameIndex = Math.min(this.state.frameIndex + 1, sequence.frames.length - 1)
+      }
+    }
+
+    // Retain leftover time so animation timing stays smooth
+    this.state.lastFrameTime = now - elapsed
   }
 
   // --- Behavior Actions ---
@@ -394,10 +419,10 @@ export class VaithyaStateMachine {
   private enterScene(position?: Position): void {
     if (position) {
       this.state.position = { x: -SPRITE_SIZE, y: position.y }
-      this.state.targetPosition = position
+      this.setTargetPosition(position)
     } else {
       this.state.position = { x: -SPRITE_SIZE, y: window.innerHeight - 100 }
-      this.state.targetPosition = { x: 50, y: window.innerHeight - 100 }
+      this.setTargetPosition({ x: 50, y: window.innerHeight - 100 })
     }
 
     this.transitionTo('WALKING')
@@ -408,15 +433,15 @@ export class VaithyaStateMachine {
     this.state.targetElementId = elementId
 
     if (position) {
-      this.state.targetPosition = position
+      this.setTargetPosition(position)
     } else {
       const element = document.getElementById(elementId)
       if (element) {
         const rect = element.getBoundingClientRect()
-        this.state.targetPosition = {
+        this.setTargetPosition({
           x: rect.left - SPRITE_SIZE - 10,
           y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
-        }
+        })
       }
     }
 
@@ -462,27 +487,38 @@ export class VaithyaStateMachine {
     }, 100)
   }
 
+  private pushElement(elementId: string, position?: Position): void {
+    this.state.targetElementId = elementId
+
+    // Walk to element first
+    this.walkToElement(elementId, position)
+
+    // When arrived, play a push/brace animation to interact
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE' || this.state.state === 'SITTING') {
+        clearInterval(checkArrival)
+        this.playOneShotAnimation('stretch')
+        this.setCooldown('PUSH_ELEMENT', COOLDOWNS.pushing)
+      }
+    }, 100)
+  }
+
   private goToSleep(position?: Position): void {
     const sleepPosition = position || {
       x: window.innerWidth - SPRITE_SIZE - 20,
       y: window.innerHeight - SPRITE_SIZE - 20,
     }
 
-    if (!position) {
-      // Walk to corner first
-      this.state.targetPosition = sleepPosition
-      this.transitionTo('WALKING')
+    this.setTargetPosition(sleepPosition)
+    this.transitionTo('WALKING')
 
-      // Transition to sleep on arrival
-      const checkArrival = setInterval(() => {
-        if (this.state.state === 'IDLE') {
-          clearInterval(checkArrival)
-          this.transitionTo('SLEEPING')
-        }
-      }, 100)
-    } else {
-      this.transitionTo('SLEEPING')
-    }
+    // Transition to sleep on arrival
+    const checkArrival = setInterval(() => {
+      if (this.state.state === 'IDLE') {
+        clearInterval(checkArrival)
+        this.transitionTo('SLEEPING')
+      }
+    }, 100)
   }
 
   private wakeUp(): void {
@@ -493,10 +529,10 @@ export class VaithyaStateMachine {
 
   private stayOutOfWay(): void {
     // Move to bottom-right corner
-    this.state.targetPosition = {
+    this.setTargetPosition({
       x: window.innerWidth - SPRITE_SIZE - 20,
       y: window.innerHeight - SPRITE_SIZE - 20,
-    }
+    })
     this.transitionTo('WALKING')
 
     // Sit when arrived
@@ -519,24 +555,30 @@ export class VaithyaStateMachine {
       if (this.state.state === 'IDLE') {
         clearInterval(checkArrival)
 
-        // Position on top of element
+        // Walk onto top of element instead of snapping
         const element = document.getElementById(elementId)
         if (element) {
           const rect = element.getBoundingClientRect()
-          this.state.position = {
+          this.setTargetPosition({
             x: rect.left + rect.width / 2 - SPRITE_SIZE / 2,
             y: rect.top - SPRITE_SIZE - 5, // Just above element
-          }
+          })
+          this.transitionTo('WALKING')
+
+          const checkClimbArrival = setInterval(() => {
+            if (this.state.state === 'IDLE') {
+              clearInterval(checkClimbArrival)
+              this.transitionTo('CLIMBING')
+
+              // Auto-transition to sitting after climbing
+              setTimeout(() => {
+                if (this.state.state === 'CLIMBING') {
+                  this.transitionTo('SITTING')
+                }
+              }, 3000) // Climb for 3 seconds
+            }
+          }, 100)
         }
-
-        this.transitionTo('CLIMBING')
-
-        // Auto-transition to sitting after climbing
-        setTimeout(() => {
-          if (this.state.state === 'CLIMBING') {
-            this.transitionTo('SITTING')
-          }
-        }, 3000) // Climb for 3 seconds
       }
     }, 100)
   }
@@ -549,25 +591,34 @@ export class VaithyaStateMachine {
     if (element) {
       const rect = element.getBoundingClientRect()
 
-      // Peek from left or right edge
+      // Peek from left or right edge with a short walk instead of a teleport
       const peekFromLeft = rect.left < window.innerWidth / 2
-      this.state.position = {
-        x: peekFromLeft ? -SPRITE_SIZE / 2 : window.innerWidth - SPRITE_SIZE / 2,
-        y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
-      }
       this.state.direction = peekFromLeft ? 'right' : 'left'
-    }
 
-    this.transitionTo('PEEKING')
+      this.setTargetPosition({
+        x: peekFromLeft
+          ? Math.max(-SPRITE_SIZE / 2, rect.left - SPRITE_SIZE)
+          : Math.min(window.innerWidth - SPRITE_SIZE / 2, rect.right),
+        y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
+      })
+      this.transitionTo('WALKING')
+
+      const checkArrival = setInterval(() => {
+        if (this.state.state === 'IDLE') {
+          clearInterval(checkArrival)
+          this.transitionTo('PEEKING')
+        }
+      }, 100)
+    }
 
     // Auto-transition to entering after peeking
     setTimeout(() => {
       if (this.state.state === 'PEEKING' && element) {
         const rect = element.getBoundingClientRect()
-        this.state.targetPosition = {
+        this.setTargetPosition({
           x: rect.left - SPRITE_SIZE - 10,
           y: rect.top + rect.height / 2 - SPRITE_SIZE / 2,
-        }
+        })
         this.transitionTo('WALKING')
       }
     }, 2000) // Peek for 2 seconds
@@ -580,10 +631,10 @@ export class VaithyaStateMachine {
     const randomX = margin + Math.random() * (window.innerWidth - SPRITE_SIZE - 2 * margin)
     const randomY = margin + Math.random() * (window.innerHeight - SPRITE_SIZE - 2 * margin)
 
-    this.state.targetPosition = {
+    this.setTargetPosition({
       x: randomX,
       y: randomY,
-    }
+    })
 
     this.transitionTo('WALKING')
 
@@ -603,10 +654,10 @@ export class VaithyaStateMachine {
     const offsetX = (Math.random() - 0.5) * 100 // Random offset ±50px
     const offsetY = (Math.random() - 0.5) * 100
 
-    this.state.targetPosition = {
+    this.setTargetPosition({
       x: Math.max(0, Math.min(window.innerWidth - SPRITE_SIZE, cursorPosition.x + offsetX)),
       y: Math.max(0, Math.min(window.innerHeight - SPRITE_SIZE, cursorPosition.y + offsetY)),
-    }
+    })
 
     this.transitionTo('WALKING')
   }
@@ -647,6 +698,7 @@ export class VaithyaStateMachine {
     }
 
     this.state.frameIndex = 0
+    this.state.lastFrameTime = Date.now()
   }
 
   /**
@@ -665,6 +717,7 @@ export class VaithyaStateMachine {
 
     this.state.currentAnimation = animation
     this.state.frameIndex = 0
+    this.state.lastFrameTime = Date.now()
 
     // Calculate duration from animation sequence
     const sequence = require('./vaithya-types').ANIMATION_SEQUENCES[animation]
@@ -682,6 +735,21 @@ export class VaithyaStateMachine {
   private playAnimationOnce(animation: VaithyaAnimation): void {
     // Internal version for blinks
     this.playOneShotAnimation(animation)
+  }
+
+  private setTargetPosition(target: Position): void {
+    this.state.targetPosition = target
+    this.state.pathStartPosition = null
+    this.state.pathControlPoint = null
+    this.state.pathProgress = 0
+  }
+
+  private finishWalking(): void {
+    this.state.targetPosition = null
+    this.state.pathStartPosition = null
+    this.state.pathControlPoint = null
+    this.state.pathProgress = 0
+    this.transitionTo('IDLE')
   }
 
   // --- Cooldown Management ---
