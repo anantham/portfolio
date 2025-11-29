@@ -36,3 +36,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Personal work logs
+WORKLOG.md
+
+# Generated visualizations
+visualizations/
