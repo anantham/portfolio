@@ -35,6 +35,9 @@ export const viewport = {
   themeColor: '#202124',
 }
 
+// Force dynamic rendering to prevent SSG issues with client-side contexts
+export const dynamic = 'force-dynamic'
+
 export default function RootLayout({
   children,
 }: {
