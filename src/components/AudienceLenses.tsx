@@ -7,7 +7,7 @@ import { motion } from 'framer-motion'
 import { Brain, Code, Heart, Flower } from 'lucide-react'
 import { content, type LensId } from '@/lib/content'
 import { useLens } from '@/contexts/LensContext'
-import { bioCards, defaultBioOrder, getRandomBioCard, bioLinks, type BioCard } from '@/lib/bio'
+import { bioCards, defaultBioOrder, getRandomBioCard, getRandomBioCardImage, bioLinks, type BioCard } from '@/lib/bio'
 
 interface LensMeta {
   id: LensId
@@ -47,6 +47,7 @@ const gradientMap: Record<LensId, { accent: string; gradient: string }> = {
 interface DisplayCard {
   lens: LensId
   card: BioCard
+  image: string
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -60,30 +61,33 @@ function shuffle<T>(items: T[]): T[] {
 
 function selectRandomBioCardsWithUniqueImages(lenses: LensId[]): DisplayCard[] {
   const lensesWithOptions = lenses.map(lens => {
-    const options = shuffle(bioCards[lens])
+    const cards = shuffle(bioCards[lens])
+    const candidates = shuffle(
+      cards.flatMap(card => shuffle(card.images).map(image => ({ card, image })))
+    )
     return {
       lens,
-      options,
-      uniqueImageCount: new Set(options.map(card => card.image)).size
+      candidates,
+      uniqueImageCount: new Set(candidates.map(candidate => candidate.image)).size
     }
   })
 
   const orderedForSearch = [...lensesWithOptions].sort((a, b) => a.uniqueImageCount - b.uniqueImageCount)
-  const selectedCards = new Map<LensId, BioCard>()
+  const selectedCards = new Map<LensId, { card: BioCard; image: string }>()
   const usedImages = new Set<string>()
 
   const backtrack = (index: number): boolean => {
     if (index >= orderedForSearch.length) return true
 
-    const { lens, options } = orderedForSearch[index]
-    for (const card of options) {
-      if (usedImages.has(card.image)) continue
-      selectedCards.set(lens, card)
-      usedImages.add(card.image)
+    const { lens, candidates } = orderedForSearch[index]
+    for (const candidate of candidates) {
+      if (usedImages.has(candidate.image)) continue
+      selectedCards.set(lens, candidate)
+      usedImages.add(candidate.image)
 
       if (backtrack(index + 1)) return true
 
-      usedImages.delete(card.image)
+      usedImages.delete(candidate.image)
       selectedCards.delete(lens)
     }
 
@@ -91,10 +95,16 @@ function selectRandomBioCardsWithUniqueImages(lenses: LensId[]): DisplayCard[] {
   }
 
   if (!backtrack(0)) {
-    return lenses.map(lens => ({ lens, card: getRandomBioCard(lens) }))
+    return lenses.map(lens => {
+      const card = getRandomBioCard(lens)
+      return { lens, card, image: getRandomBioCardImage(card) }
+    })
   }
 
-  return lenses.map(lens => ({ lens, card: selectedCards.get(lens)! }))
+  return lenses.map(lens => {
+    const selected = selectedCards.get(lens)!
+    return { lens, card: selected.card, image: selected.image }
+  })
 }
 
 const escapeRegExp = (value: string) => {
@@ -161,7 +171,8 @@ export default function AudienceLenses() {
   const initialMixCards = useMemo(() => (
     defaultBioOrder.map(lens => ({
       lens,
-      card: bioCards[lens][0]
+      card: bioCards[lens][0],
+      image: getRandomBioCardImage(bioCards[lens][0])
     }))
   ), [])
 
@@ -203,6 +214,15 @@ export default function AudienceLenses() {
     return selectedLens ?? 'engineer'
   }, [selectedLens, uniformLens, viewMode])
 
+  const uniformCards = useMemo<DisplayCard[]>(() => {
+    if (viewMode !== 'uniform') return []
+    return bioCards[activeLens].map(card => ({
+      lens: activeLens,
+      card,
+      image: getRandomBioCardImage(card)
+    }))
+  }, [activeLens, viewMode])
+
   const handleCardClick = (lens: LensId) => {
     if (viewMode === 'mix') {
       setViewMode('uniform')
@@ -222,7 +242,7 @@ export default function AudienceLenses() {
   }
 
   const cardsToDisplay: DisplayCard[] = viewMode === 'uniform'
-    ? bioCards[activeLens].map(card => ({ lens: activeLens, card }))
+    ? uniformCards
     : mixCards
 
   return (
@@ -238,13 +258,15 @@ export default function AudienceLenses() {
           <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
             {content.lenses.title}
           </h2>
-          <p className="text-lg text-zen-300 max-w-3xl mx-auto">
-            {content.lenses.subtitle}
-          </p>
+          {content.lenses.subtitle ? (
+            <p className="text-lg text-zen-300 max-w-3xl mx-auto">
+              {content.lenses.subtitle}
+            </p>
+          ) : null}
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {cardsToDisplay.map(({ lens, card }, index) => {
+          {cardsToDisplay.map(({ lens, card, image }, index) => {
             const meta = lensMap[lens]
             const Icon = meta.icon
             const isActive = viewMode === 'uniform' && activeLens === lens
@@ -269,7 +291,7 @@ export default function AudienceLenses() {
                     className={`relative w-full overflow-hidden bg-zen-950/40 aspect-[4/3]`}
                   >
                     <Image
-                      src={card.image}
+                      src={image}
                       alt={card.title}
                       fill
                       className="object-contain"

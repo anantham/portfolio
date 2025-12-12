@@ -48,8 +48,9 @@ export const createZenStrategy: StrategyFactory<ZenConfig> = (config, options) =
 
   const softReset = (env: MotionEnvironment) => {
     state.time = 0
-    state.position.x = env.width * 0.5
-    state.position.y = env.height * 0.5
+    const startPad = Math.max(config.pad, 0)
+    state.position.x = startPad
+    state.position.y = startPad
     const angle = random.next() * Math.PI * 2
     state.heading = angle
     const speed = config.baseSpeed

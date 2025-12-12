@@ -73,9 +73,9 @@ const supportOptions: SupportOption[] = [
         icon: Heart
       },
       {
-        label: 'DM on Twitter',
+        label: 'DM on Telegram',
         type: 'link',
-        value: siteConfig.contact.dm,
+        value: 'https://t.me/everythingisrelative',
         icon: MessageCircle
       }
     ]
@@ -118,17 +118,11 @@ const supportOptions: SupportOption[] = [
     color: 'text-green-400',
     gradient: 'from-green-500/20 to-emerald-500/20',
     actions: [
-      ...(hasLink(siteConfig.contact.booking) ? [{
-        label: 'Schedule meeting',
-        type: 'link' as const,
+      {
+        label: 'Book time',
+        type: 'link',
         value: siteConfig.contact.booking,
         icon: Calendar
-      }] : []),
-      {
-        label: 'Email directly',
-        type: 'email',
-        value: `mailto:${siteConfig.contact.email}?subject=${encodeURIComponent('Meeting request')}&body=${encodeURIComponent('Hi! I\'d like to schedule some time to chat about...')}`,
-        icon: MessageCircle
       }
     ]
   }
@@ -160,7 +154,9 @@ export default function SupportSection() {
         handleCopy(action.value)
         break
       case 'email':
-        window.location.href = action.value
+        if (!window.open(action.value, '_blank', 'noopener,noreferrer')) {
+          window.location.href = action.value
+        }
         break
     }
   }

@@ -11,7 +11,7 @@
       {
         "id": "ai-leverage",
         "title": "Organizing for Acceleration",
-        "summary": "I helped organize the Live Machinery hackathon in Bangalore, and the workshop in Blackpool. I was a facilitator for the Auto structures project at the AI Safety Camp 10th, 2025 cohort this year. I’d love to hear your thoughts about how we can leverage advances in AI to supercharge alignment research.",
+        "summary": "I helped organize the Live Machinery hackathon in Bangalore, and the workshop in EA Hotel, Blackpool. I was a facilitator for the Auto structures project at the AI Safety Camp 10th, 2025 cohort this year. I’d love to hear your thoughts about how we can leverage advances in AI to supercharge alignment research.",
         "image": "/images/bio/blackpool.jpg"
       },
       {
@@ -32,13 +32,13 @@
         "id": "open-science",
         "title": "Open Source Code",
         "summary": "I spend a lot of time vibe coding and sharing my projects on github. You can find my forks of my friend's projects, my own crazy ideas come alive in websites.",
-        "image": "/images/bio/explaining-sitting-in-oxford.jpg"
+        "image": "/images/bio/github.png"
       },
       {
-        "id": "rationality-community",
-        "title": "Rationality Communities",
-        "summary": "Active in rationality and EA communities for several years, currently team lead for Auto Structures project at AI Safety Camps. Organized Live Machinery hackathon focusing on practical alignment research tooling. Approach prioritizes empirical validation over theoretical speculation—focus on what actions you can take to make a difference.",
-        "image": "/images/bio/speaker-events.jpg"
+        "id": "fund-raiser",
+        "title": "Manifund Projects",
+        "summary": "I raised funds on Manifund and CEA to distribute hundreds of copies of HPMOR across India. Crowd funding is a superb method of getting focused projects off the ground",
+        "image": "/images/bio/hpmor.jpg"
       },
       {
         "id": "knowledge-infrastructure",
@@ -48,8 +48,8 @@
       },
       {
         "id": "contemplative-science",
-        "title": "Contemplative Research",
-        "summary": "Completed Goenka Vipassana retreat and currently in MAPLE AI fellowship (4+ hours daily meditation, monthly week-long isolation periods). Interested in bridging contemplative phenomenology with computational approaches to consciousness and alignment.",
+        "title": "Contemplative Practices",
+        "summary": "Completed Goenka Vipassana retreat and was awarded the MAPLE AI fellowship (4+ hours daily meditation, monthly week-long isolation periods for 5 months +). This has made me very motivated to bridge contemplative practices with empirical approaches to consciousness and alignment.",
         "image": "/images/bio/monastic-robes.jpg"
       }
     ],
@@ -58,13 +58,13 @@
         "id": "mountain-training",
         "title": "Mountains help me run cool",
         "summary": "I spent more than a month training at the National Institute of Mountaineering and Adventure Sports (NIMAS). It was the last course of 2024 before it became too cold and dangerous to traverse the passes. Elites from the army, navy, and airforce were selected to join this course where skills like climbing up sheer faces of rock cliffs, and ice glaciers and rescuing people stuck in crevices were taught at 16500 feet above sea level. I stayed in army barracks on the border between China and India before going camping in tents. Other treks I enjoyed include Deoriatal Chandrashila, Kedar Tal, etc.",
-        "image": "/images/bio/mountain.jpg"
+        "image": ["/images/bio/mountain.jpg", "/images/bio/summit-sunglasses.jpg", "/images/bio/hiking.jpg"]
       },
       {
         "id": "global-travel",
         "title": "Travelling to diverse environments",
         "summary": "Over my life, I have had the opportunity to see many parts of the world. I have gone on road trips around Ireland, all the way from Dublin to the Cliffs of Moher. I got to see the world's largest tree when I went camping at Sequoia National Park in California. Driving around the Lake District UK and other remote parts of the countryside remains my fond memory. Notable mentions include eating watermelons from Georgia, listening to Minami sing in Fukuoka, Japan, a road trip from the coolest freshwater Lake Michigan to Bentonville, Arkansas, the clean ocean off Tanzania, taking the ropeway to the Tian Tan Buddha in Hong Kong, sunrise after cross country skiing in Vermont and many more. I’d love to hear your suggestions for magical places around the world worth visiting.",
-        "image": "/images/bio/waterfall.jpg"
+        "image": ["/images/bio/waterfall.jpg", "/images/bio/explaining-sitting-in-oxford.jpg"]
       },
       {
         "id": "audiophile",
@@ -76,33 +76,33 @@
         "id": "music-experiences",
         "title": "Living Music is a special Qualia experienced as a group",
         "summary": "Some of my best experiences in this life has been hearing TOOL play live in LA. I love their music so much. I have been fortunate to hear Jazz being played in Bangalore by indie artists that put their soul into the music. Jacob Collier visited my city and I had an amazing time listening to him. I grew up listening to Taylor Swift and love her songs. Instrumental music on the handpan or piano adaptations by animez are also some of my deep joys to experience.",
-        "image": "/images/bio/cold-plunge.jpg"
+        "image": "/images/bio/tool.jpg"
       }
     ],
     "buddhist": [
       {
-        "id": "goenka-practice",
-        "title": "Vipassana Practice",
-        "summary": "I finished a Goenka Vipassana retreat in India last year and was part of Jhorney’s initial trial runs. Currently I am fortunate enough to be awarded the AI fellowship from MAPLE from the start of 2025. Right now I am spending more than 4 hrs a day meditating and every month spending more than a week isolated from the internet, not communicating with anyone, and doing intense meditation for the whole Advance.",
-        "image": "/images/bio/monastic-robes.jpg"
+        "id": "ooty-retreat",
+        "title": "Ooty Alignment Retreat",
+        "summary": "Me and Bhishma run the Ooty Alignment Retreats, you can read our report on the 2025 v2 here. ",
+        "image": "/images/bio/ooty.jpg"
       },
       {
-        "id": "sutra-conversations",
-        "title": "Sutta Conversations",
-        "summary": "If anyone wants to discuss what the appropriate translation or interpretation of the sutras are, lets jam in pali ;)",
-        "image": "/images/bio/hiking.jpg"
+        "id": "goa-residency",
+        "title": "Groundless Alignment Residency",
+        "summary": "Me and Harshit ran the three week residency program for the AISC 2025 fellows. We had a lot of fun and made real progress on making Groundless.ai gather steam.",
+        "image": "/images/bio/goa.jpg"
       },
       {
-        "id": "tech-as-karma",
-        "title": "Alignment as Compassion",
-        "summary": "Currently working with AI alignment—how do we build systems that don't cause suffering? The First Noble Truth applies to our technological creations too. We're creating beings that will outlast us. What intentions are we encoding?",
-        "image": "/images/bio/explaining-sitting-in-oxford.jpg"
+        "id": "fitness",
+        "title": "Cold Plunge and Sauna",
+        "summary": "You know what I love? cycling between sweating in a sauna (dry or wet heat) and then jumping into an ice bath. That wakes me up ;)",
+        "image": "/images/bio/cold-plunge.jpg"
       },
       {
-        "id": "pilgrimage",
-        "title": "Finding my Sangha",
-        "summary": "Travel has been pilgrimage by accident. Sitting with different sanghas, learning how the teachings translate across cultures. The essential questions remain: What is suffering? What causes it? Is there a path through?",
-        "image": "/images/bio/mountain.jpg"
+        "id": "cuteness",
+        "title": "I love cuddles",
+        "summary": "If I get my hands on cute animals, I will spend a lot of time playing with them. Please send all kittens and puppies my way!",
+        "image": "/images/bio/puppy.jpg"
       }
     ]
   }

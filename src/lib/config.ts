@@ -1,8 +1,17 @@
 // Site configuration and environment variables
 
+const primaryEmail =
+  process.env.NEXT_PUBLIC_EMAIL_ADDRESS ||
+  process.env.NEXT_PUBLIC_EMAIL ||
+  'adityaarpitha@gmail.com'
+
+const bookingLink =
+  process.env.NEXT_PUBLIC_BOOKING_LINK ||
+  'https://calendar.app.google/ZNwQV86wJBg5LaWdA'
+
 export const siteConfig = {
   name: process.env.NEXT_PUBLIC_NAME || "Aditya Arpitha",
-  email: process.env.NEXT_PUBLIC_EMAIL_ADDRESS || "hello@adityaarpitha.com",
+  email: primaryEmail,
   location: process.env.NEXT_PUBLIC_LOCATION || "Building bridges between communities",
 
   // SEO
@@ -22,9 +31,9 @@ export const siteConfig = {
 
   // Contact
   contact: {
-    email: process.env.NEXT_PUBLIC_EMAIL_ADDRESS || "",
+    email: primaryEmail,
     dm: process.env.NEXT_PUBLIC_DM_URL || "",
-    booking: process.env.NEXT_PUBLIC_BOOKING_LINK || "",
+    booking: bookingLink,
   },
 
   // Projects
