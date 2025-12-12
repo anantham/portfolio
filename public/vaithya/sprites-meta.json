@@ -1,0 +1,130 @@
+{
+  "source": "/public/vaithya/sprites.png",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+    "idle": {
+      "row": 0,
+      "frames": 3,
+      "fps": 2,
+      "loop": true
+    },
+    "walk": {
+      "row": 1,
+      "frames": 4,
+      "fps": 8,
+      "loop": true
+    },
+    "point_right": {
+      "row": 2,
+      "colStart": 0,
+      "frames": 2,
+      "fps": 3,
+      "loop": false
+    },
+    "point_up": {
+      "row": 2,
+      "colStart": 2,
+      "frames": 2,
+      "fps": 3,
+      "loop": false
+    },
+    "sit": {
+      "row": 3,
+      "frames": 2,
+      "fps": 2,
+      "loop": true
+    },
+    "sleep": {
+      "row": 4,
+      "frames": 2,
+      "fps": 1,
+      "loop": true
+    },
+    "blink": {
+      "row": 5,
+      "frames": 3,
+      "fps": 12,
+      "loop": false,
+      "overlay": true
+    },
+    "look_around": {
+      "row": 6,
+      "frames": 4,
+      "fps": 3,
+      "loop": false
+    },
+    "scratch_head": {
+      "row": 7,
+      "frames": 3,
+      "fps": 4,
+      "loop": false
+    },
+    "stretch": {
+      "row": 8,
+      "frames": 3,
+      "fps": 3,
+      "loop": false
+    },
+    "climb": {
+      "row": 9,
+      "frames": 4,
+      "fps": 6,
+      "loop": true
+    },
+    "peek": {
+      "row": 10,
+      "frames": 2,
+      "fps": 2,
+      "loop": true
+    },
+    "yawn": {
+      "row": 11,
+      "frames": 3,
+      "fps": 3,
+      "loop": false
+    },
+    "fidget": {
+      "row": 12,
+      "frames": 4,
+      "fps": 5,
+      "loop": false
+    }
+  },
+  "costumes": {
+    "builder_hat": {
+      "row": 13,
+      "col": 0
+    },
+    "monk_robe": {
+      "row": 13,
+      "col": 1
+    },
+    "wizard_cap": {
+      "row": 13,
+      "col": 2
+    },
+    "leaf_crown": {
+      "row": 13,
+      "col": 3
+    }
+  },
+  "particles": {
+    "sleep_z": {
+      "row": 14,
+      "col": 0
+    },
+    "sparkle": {
+      "row": 14,
+      "col": 1
+    },
+    "question": {
+      "row": 14,
+      "col": 2
+    },
+    "exclaim": {
+      "row": 14,
+      "col": 3
+    }
+  }
+}

@@ -12,9 +12,13 @@ export default function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut" }}
         >
-          <h1 className="text-5xl md:text-7xl font-light text-zen-50 mb-16 tracking-tight leading-tight">
-            {content.hero.title.main}{' '}
-            <span className="text-dharma-400 font-normal">{content.hero.title.highlight}</span>
+          <h1 className="text-5xl md:text-7xl font-light text-zen-50 mb-16 tracking-tight">
+            <span className="block leading-tight">
+              {content.hero.title.main}
+            </span>
+            <span className="block mt-4 md:mt-6 leading-tight text-dharma-400 font-normal">
+              {content.hero.title.highlight}
+            </span>
           </h1>
 
           <motion.p

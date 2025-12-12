@@ -58,6 +58,45 @@ function shuffle<T>(items: T[]): T[] {
   return copy
 }
 
+function selectRandomBioCardsWithUniqueImages(lenses: LensId[]): DisplayCard[] {
+  const lensesWithOptions = lenses.map(lens => {
+    const options = shuffle(bioCards[lens])
+    return {
+      lens,
+      options,
+      uniqueImageCount: new Set(options.map(card => card.image)).size
+    }
+  })
+
+  const orderedForSearch = [...lensesWithOptions].sort((a, b) => a.uniqueImageCount - b.uniqueImageCount)
+  const selectedCards = new Map<LensId, BioCard>()
+  const usedImages = new Set<string>()
+
+  const backtrack = (index: number): boolean => {
+    if (index >= orderedForSearch.length) return true
+
+    const { lens, options } = orderedForSearch[index]
+    for (const card of options) {
+      if (usedImages.has(card.image)) continue
+      selectedCards.set(lens, card)
+      usedImages.add(card.image)
+
+      if (backtrack(index + 1)) return true
+
+      usedImages.delete(card.image)
+      selectedCards.delete(lens)
+    }
+
+    return false
+  }
+
+  if (!backtrack(0)) {
+    return lenses.map(lens => ({ lens, card: getRandomBioCard(lens) }))
+  }
+
+  return lenses.map(lens => ({ lens, card: selectedCards.get(lens)! }))
+}
+
 const escapeRegExp = (value: string) => {
   const specials = new Set(['\\', '^', '$', '*', '+', '?', '.', '(', ')', '|', '{', '}', '[', ']'])
   let escaped = ''
@@ -142,12 +181,8 @@ export default function AudienceLenses() {
   }, [])
 
   const regenerateMix = useCallback(() => {
-    setMixCards(
-      shuffle(defaultBioOrder).map(lens => ({
-        lens,
-        card: getRandomBioCard(lens)
-      }))
-    )
+    const lenses = shuffle(defaultBioOrder)
+    setMixCards(selectRandomBioCardsWithUniqueImages(lenses))
   }, [])
 
   useEffect(() => {

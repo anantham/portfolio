@@ -5,33 +5,33 @@
       {
         "id": "ai-alignment",
         "title": "Alignment In Practice",
-        "summary": "I have experience working with the rationality and EA community for the past few years on addressing the risks that are emerging as our species starts building Artificial General Intelligence. You can find open projects that I am seeking collaborators for here. There is no point in worrying, focus on what actions you can take to make a difference!",
+        "summary": "I have experience working within the rationality and EA community for the past few years. My focus has been addressing the relationship between us and AI. You can find open projects that I am seeking collaborators for here. There is a lot of ways in which you can contribute to this field, so do contact me.",
         "image": "/images/bio/speaker-events.jpg"
       },
       {
         "id": "ai-leverage",
         "title": "Organizing for Acceleration",
-        "summary": "I helped organize the Live Machinery hackathon in Bangalore, and the workshop in Blackpool. I am currently a team lead for the Auto structures project at the AI Safety Camps cohort this year. I’d love to hear your thoughts about how we can leverage advances in AI to supercharge alignment research.",
-        "image": "/images/bio/explaining-sitting-in-oxford.jpg"
+        "summary": "I helped organize the Live Machinery hackathon in Bangalore, and the workshop in Blackpool. I was a facilitator for the Auto structures project at the AI Safety Camp 10th, 2025 cohort this year. I’d love to hear your thoughts about how we can leverage advances in AI to supercharge alignment research.",
+        "image": "/images/bio/blackpool.jpg"
       },
       {
         "id": "second-brain",
         "title": "Second Brain Systems",
-        "summary": "I have taken classes on how to structure notes, optimize retrieval, integrate knowledge management systems. My Obsidian vault is my digital garden that I have build tools to view in VR, to manage via local AI models to automate workflows. Notion has also been a companion in my research work, keeping track of investments, hobbies, and travels. I started the Second Brain meetup group in Bangalore, so hit me up and we can meet up in person and share tips!",
-        "image": "/images/bio/audiophile.png"
+        "summary": "I have taken workshops on how to structure notes, optimize retrieval, integrate knowledge management systems. My Obsidian vault is my digital garden where I can walk around in my mind palace (in VR), to manage via local AI models to automate workflows. Notion has also been a companion in my research work, keeping track of investments, hobbies, and travels. I started the Second Brain telegram group in Bangalore, so hit me up and we can meet up in person and share tips!",
+        "image": "/images/bio/obsidian.png"
       },
       {
         "id": "academic-roots",
         "title": "Academic Foundations",
-        "summary": "I did my Bachelor in Instrumentation and Control Engineering from the National Institute of Technology, Tiruchirappalli. There I learned about how physical parameters like viscosity and temperature can be turned into electrical parameters using sensors. How sensors leveraged natural laws and then the mathematics of control theory calculated how to intervene in a system and send signals that actuators used to turn into physical variables. During the summer I spent a semester at Stanford University studying Data Science and later got into the Indian Institute of Science Bangalore’s Computational Data Science Department for my PhD.",
-        "image": "/images/bio/summit-sunglasses.jpg"
+        "summary": "I did my Bachelor in Instrumentation and Control Engineering from the National Institute of Technology, Tiruchirappalli. There I learned about how physical parameters like viscosity and temperature can be turned into electrical parameters using sensors. How sensors leveraged natural laws and then the mathematics of control theory calculated how to intervene in a system and send signals that actuators used to turn into physical variables. During the summer I spent a semester at Stanford University studying Data Science and later got into the Indian Institute of Science Bangalore’s Computational Data Science Department for my PhD. I was awarded the Prime Minister's Research Fellowship and later dropped out my PhD to focus on the alignment problem.",
+        "image": "/images/bio/newspaper.jpg"
       }
     ],
     "lw-math": [
       {
-        "id": "coordination-science",
-        "title": "Mathematics of Coordination",
-        "summary": "PhD in Computational Data Science at IISc Bangalore, applying mathematical frameworks to coordination problems and AI alignment. Background spans control theory (sensor-actuator feedback systems) to governance optimization (studied for Indian Civil Services to understand bureaucratic coordination mechanisms).",
+        "id": "open-science",
+        "title": "Open Source Code",
+        "summary": "I spend a lot of time vibe coding and sharing my projects on github. You can find my forks of my friend's projects, my own crazy ideas come alive in websites.",
         "image": "/images/bio/explaining-sitting-in-oxford.jpg"
       },
       {
@@ -90,19 +90,19 @@
         "id": "sutra-conversations",
         "title": "Sutta Conversations",
         "summary": "If anyone wants to discuss what the appropriate translation or interpretation of the sutras are, lets jam in pali ;)",
-        "image": "/images/bio/monastic-robes.jpg"
+        "image": "/images/bio/hiking.jpg"
       },
       {
         "id": "tech-as-karma",
         "title": "Alignment as Compassion",
         "summary": "Currently working with AI alignment—how do we build systems that don't cause suffering? The First Noble Truth applies to our technological creations too. We're creating beings that will outlast us. What intentions are we encoding?",
-        "image": "/images/bio/monastic-robes.jpg"
+        "image": "/images/bio/explaining-sitting-in-oxford.jpg"
       },
       {
         "id": "pilgrimage",
         "title": "Finding my Sangha",
         "summary": "Travel has been pilgrimage by accident. Sitting with different sanghas, learning how the teachings translate across cultures. The essential questions remain: What is suffering? What causes it? Is there a path through?",
-        "image": "/images/bio/monastic-robes.jpg"
+        "image": "/images/bio/mountain.jpg"
       }
     ]
   }

@@ -36,26 +36,23 @@ const projects: Project[] = [
     gradient: 'from-blue-500/20 to-purple-500/20',
     tags: ['Next.js', 'AI', 'Curation', 'Productivity'],
     links: {
-      demo: '#', // Will be replaced with actual URL
-      github: '#',
-      details: '#'
+      demo: 'https://lexicon-forge.vercel.app/'
     },
     featured: true
   },
   {
-    id: 'customtales',
-    title: 'Custom Tales',
-    subtitle: 'Craft culture through story',
-    description: 'Interactive storytelling platform exploring the intersection of narrative, ritual, and community building.',
-    longDescription: 'Custom Tales is an experimental platform for creating immersive, personalized stories that help communities build shared meaning and ritual practice.',
-    status: 'beta',
+    id: 'tarot-cards',
+    title: 'Tarot Cards',
+    subtitle: 'Let the visuals prompt you',
+    description: 'A visual tarot experience for reflection and storytelling. Decks from Lord of the Mysteries included.',
+    longDescription: 'Draw cards, sit with the imagery, and let it prompt your next thought. Includes decks inspired by Lord of the Mysteries.',
+    status: 'live',
     type: 'story',
     icon: BookOpen,
     gradient: 'from-rose-500/20 to-orange-500/20',
-    tags: ['Storytelling', 'Community', 'Ritual', 'Culture'],
+    tags: ['Tarot', 'Visual Prompts', 'Storytelling', 'Ritual'],
     links: {
-      subdomain: 'customtales.adityaarpitha.com',
-      details: '#'
+      subdomain: 'cardsfromtarot.vercel.app'
     }
   },
   {

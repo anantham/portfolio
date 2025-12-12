@@ -90,9 +90,9 @@ const supportOptions: SupportOption[] = [
     gradient: 'from-dharma-500/20 to-yellow-500/20',
     actions: [
       ...(hasLink(siteConfig.support.upi) ? [{
-        label: 'UPI (India)',
-        type: 'copy' as const,
-        value: siteConfig.support.upi,
+        label: 'Pay via UPI',
+        type: 'link' as const,
+        value: `upi://pay?pa=${encodeURIComponent(siteConfig.support.upi)}&pn=${encodeURIComponent(siteConfig.name)}&cu=INR`,
         icon: IndianRupee
       }] : []),
       ...(hasLink(siteConfig.support.eth) ? [{
@@ -150,6 +150,10 @@ export default function SupportSection() {
   const handleAction = (action: SupportOption['actions'][0]) => {
     switch (action.type) {
       case 'link':
+        if (action.value.startsWith('upi:')) {
+          window.location.href = action.value
+          break
+        }
         window.open(action.value, '_blank', 'noopener,noreferrer')
         break
       case 'copy':
@@ -172,14 +176,10 @@ export default function SupportSection() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
-            If this work{' '}
-            <span className="text-dharma-400">helps</span>,
-            <br />
-            help it help more people
+            Want to <span className="text-dharma-400">support</span> this work?
           </h2>
           <p className="text-xl text-zen-300 max-w-3xl mx-auto">
-            Your support—whether through sharing, gratitude, resources, or connection—enables
-            this work to reach and serve more communities.
+            Share it with a friend, send a quick note, chip in, or book time to talk—whatever feels aligned.
           </p>
         </motion.div>
 
