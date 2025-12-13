@@ -70,7 +70,7 @@ const projects: Project[] = [
     gradient: 'from-green-500/20 to-teal-500/20',
     tags: ['Research', 'Social Networks', 'Community', 'Analysis'],
     links: {
-      details: '#'
+      details: 'https://github.com/anantham/map-tpot'
     }
   }
 ]
