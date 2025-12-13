@@ -51,7 +51,9 @@ export const createZenStrategy: StrategyFactory<ZenConfig> = (config, options) =
     const startPad = Math.max(config.pad, 0)
     state.position.x = startPad
     state.position.y = startPad
-    const angle = random.next() * Math.PI * 2
+    const dx = env.width * 0.5 - state.position.x
+    const dy = env.height * 0.5 - state.position.y
+    const angle = Math.atan2(dy, dx)
     state.heading = angle
     const speed = config.baseSpeed
     state.velocity.x = Math.cos(angle) * speed

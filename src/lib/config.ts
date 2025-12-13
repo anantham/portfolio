@@ -9,6 +9,24 @@ const bookingLink =
   process.env.NEXT_PUBLIC_BOOKING_LINK ||
   'https://calendar.app.google/ZNwQV86wJBg5LaWdA'
 
+const upiId =
+  process.env.NEXT_PUBLIC_UPI_ID ||
+  'adityaarpitha@okicici'
+
+const ethAddress =
+  process.env.NEXT_PUBLIC_ETH_ADDRESS ||
+  'adityaarpitha.eth'
+
+const patreonUrl =
+  process.env.NEXT_PUBLIC_PATREON_URL ||
+  'https://patreon.com/adityaarpitha'
+
+const parseFeatureFlag = (value: string | undefined) => {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
 export const siteConfig = {
   name: process.env.NEXT_PUBLIC_NAME || "Aditya Arpitha",
   email: primaryEmail,
@@ -49,9 +67,14 @@ export const siteConfig = {
 
   // Support
   support: {
-    upi: process.env.NEXT_PUBLIC_UPI_ID || "",
-    eth: process.env.NEXT_PUBLIC_ETH_ADDRESS || "",
-    patreon: process.env.NEXT_PUBLIC_PATREON_URL || "",
+    upi: upiId,
+    eth: ethAddress,
+    patreon: patreonUrl,
+  },
+
+  // Feature flags
+  features: {
+    tinyVaithyaBeta: parseFeatureFlag(process.env.NEXT_PUBLIC_TINY_VAITHYA_BETA),
   },
 
   // Content

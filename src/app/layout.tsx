@@ -8,6 +8,7 @@ import AtmosphereDebugPanel from '@/components/AtmosphereDebugPanel'
 import TinyVaithya from '@/components/TinyVaithya'
 import { LensProvider } from '@/contexts/LensContext'
 import { AtmosphereProvider } from '@/contexts/AtmosphereContext'
+import { siteConfig } from '@/lib/config'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -53,8 +54,8 @@ export default function RootLayout({
               <CircadianBackground />
               {/* Wandering dharma wheel in background */}
               <WanderingDharmaWheel />
-              {/* Tiny Vaithya mascot - toggle with Alt+V */}
-              <TinyVaithya />
+              {/* Tiny Vaithya mascot (beta) */}
+              {siteConfig.features.tinyVaithyaBeta ? <TinyVaithya /> : null}
               {children}
               <Footer />
               {/* Debug panel - toggle with Alt+D */}

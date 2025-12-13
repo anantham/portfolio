@@ -94,6 +94,11 @@ const supportOptions: SupportOption[] = [
         type: 'link' as const,
         value: `upi://pay?pa=${encodeURIComponent(siteConfig.support.upi)}&pn=${encodeURIComponent(siteConfig.name)}&cu=INR`,
         icon: IndianRupee
+      }, {
+        label: 'Copy UPI ID',
+        type: 'copy' as const,
+        value: siteConfig.support.upi,
+        icon: Copy
       }] : []),
       ...(hasLink(siteConfig.support.eth) ? [{
         label: 'ETH Address',

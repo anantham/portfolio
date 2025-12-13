@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import content from '@/data/content.json'
+import DharmaWheel from '@/components/DharmaWheel'
 
 export default function HeroSection() {
   return (
@@ -12,6 +13,7 @@ export default function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut" }}
         >
+          <DharmaWheel size={160} className="mb-10 animate-float" />
           <h1 className="text-5xl md:text-7xl font-light text-zen-50 mb-16 tracking-tight">
             <span className="block leading-tight">
               {content.hero.title.main}

@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 import { ExternalLink, Github, Play, Sparkles, BookOpen, Palette } from 'lucide-react'
 
 interface Project {
@@ -14,6 +15,7 @@ interface Project {
   icon: React.ComponentType<any>
   gradient: string
   tags: string[]
+  previewImage?: string
   links: {
     demo?: string
     github?: string
@@ -26,15 +28,16 @@ interface Project {
 const projects: Project[] = [
   {
     id: 'lexion',
-    title: 'Lexion',
-    subtitle: 'Curate the good trash; keep the taste',
-    description: 'A minimalist curation tool for discovering and organizing quality content from the noise.',
-    longDescription: 'Lexion helps you cut through information overload by providing intelligent filtering and curation tools. Built for researchers, creators, and anyone who values signal over noise.',
+    title: 'Lexicon Forge',
+    subtitle: 'Participate in reading, share your taste with others',
+    description: 'Read, translate, and remix webnovels with your own flair.',
+    longDescription: 'This is an interface you can use to read webnovels from different languages, translate it, insert images, and craft your version, your translation!',
     status: 'live',
     type: 'app',
     icon: Sparkles,
     gradient: 'from-blue-500/20 to-purple-500/20',
-    tags: ['Next.js', 'AI', 'Curation', 'Productivity'],
+    tags: ['Webnovels', 'Translation', 'Remix', 'Reading'],
+    previewImage: '/images/lexicon.png',
     links: {
       demo: 'https://lexicon-forge.vercel.app/'
     },
@@ -182,11 +185,23 @@ export default function ProjectsShowcase() {
 
                   <div className="lg:w-80">
                     <div className="glass-card p-6 rounded-2xl bg-zen-800/30">
-                      <div className="aspect-video bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-xl flex items-center justify-center">
-                        <div className="text-zen-400 text-center">
-                          <project.icon size={48} className="mx-auto mb-2" />
-                          <p className="text-sm">Demo Preview</p>
-                        </div>
+                      <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-xl">
+                        {project.previewImage ? (
+                          <Image
+                            src={project.previewImage}
+                            alt={`${project.title} preview`}
+                            fill
+                            className="object-cover"
+                            sizes="(min-width: 1024px) 320px, 100vw"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="text-zen-400 text-center">
+                              <project.icon size={48} className="mx-auto mb-2" />
+                              <p className="text-sm">Demo Preview</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
