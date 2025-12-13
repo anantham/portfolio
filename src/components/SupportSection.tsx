@@ -118,7 +118,7 @@ const supportOptions: SupportOption[] = [
     id: 'book',
     title: 'Book Time',
     subtitle: 'Meet directly',
-    description: 'Schedule a conversation about collaboration or just to connect.',
+    description: 'Schedule a conversation about collaboration, life coaching, mentorship, or just to connect.',
     icon: Calendar,
     color: 'text-green-400',
     gradient: 'from-green-500/20 to-emerald-500/20',
@@ -159,9 +159,12 @@ export default function SupportSection() {
         handleCopy(action.value)
         break
       case 'email':
-        if (!window.open(action.value, '_blank', 'noopener,noreferrer')) {
-          window.location.href = action.value
-        }
+        // Use a temporary anchor to open mailto in new context without replacing current page
+        const emailLink = document.createElement('a')
+        emailLink.href = action.value
+        emailLink.target = '_blank'
+        emailLink.rel = 'noopener noreferrer'
+        emailLink.click()
         break
     }
   }
@@ -180,7 +183,7 @@ export default function SupportSection() {
             Want to <span className="text-dharma-400">support</span> this work?
           </h2>
           <p className="text-xl text-zen-300 max-w-3xl mx-auto">
-            Share it with a friend, send a quick note, chip in, or book time to talk—whatever feels aligned.
+            Signal boost my creations in your network, send me a heartfelt message, support my financial slack, or jump on a call to chat. I appreciate all forms of assistance.
           </p>
         </motion.div>
 
@@ -278,8 +281,7 @@ export default function SupportSection() {
               Building in the open
             </h3>
             <p className="text-zen-300 max-w-2xl mx-auto leading-relaxed">
-              This work happens in community. Whether you&apos;re here to learn, contribute,
-              or simply witness the process—you&apos;re part of creating something meaningful together.
+              It is important that we co-create, hold each other responsible and stay in relation to each other. We are all in this together so I would love to cultivate a thriving community.
             </p>
           </div>
         </motion.div>
