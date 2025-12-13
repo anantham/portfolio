@@ -227,11 +227,11 @@ export function getCircadianTheme(state: CircadianState): CircadianTheme {
           start: `hsl(210, 25%, ${35 + state.phaseProgress * 5}%)`,
           end: `hsl(220, 30%, ${45 + state.phaseProgress * 5}%)`
         },
-        accent: `hsl(200, 60%, ${55 + state.phaseProgress * 5}%)`,
-        glow: `hsl(190, 70%, ${65 + state.phaseProgress * 5}%)`,
+        accent: `hsl(25, 70%, 35%)`,
+        glow: `hsl(35, 80%, 45%)`,
         text: {
-          primary: `hsl(210, 15%, 95%)`,
-          secondary: `hsl(210, 12%, 75%)`
+          primary: `hsl(220, 25%, 15%)`,
+          secondary: `hsl(220, 20%, 30%)`
         },
         speed: 1.0 + state.phaseProgress * 0.2,
         intensity: 1.1 + state.phaseProgress * 0.1,
