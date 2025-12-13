@@ -33,8 +33,9 @@
   },
   "hero": {
     "title": {
-      "main": "Building Bridges to",
-      "highlight": "Niche Subcultures"
+      "main": "Building Bridges between",
+      "highlight": "Niche",
+      "suffix": "Subcultures"
     },
     "buttons": {
       "primary": {
@@ -95,16 +96,16 @@
     "subtitle": "Your support whether through sharing, gratitude, resources, or connection—enables this work to reach and serve more communities.",
     "closing": {
       "title": "Building in the open",
-      "text": "This work happens in community. Whether you're here to learn, contribute, or simply witness the process—you're part of creating something meaningful together."
+      "text": "It is important that we co-create, hold each other responsible and stay in relation to each other. We are all in this together so I would love to cultivate a thriving community."
     }
   },
       "physics": {
         "dharmaWheel": {
       "visual": {
         "size": 64,
-        "opacity": 0.4
+        "opacity": 0.48
       },
-          "defaultStrategy": "engineer-zen",
+          "defaultStrategy": "lw-flow",
           "strategies": {
             "engineer-zen": {
               "type": "zen",

@@ -33,7 +33,7 @@ export const siteConfig = {
   location: process.env.NEXT_PUBLIC_LOCATION || "Building bridges between communities",
 
   // SEO
-  title: "Aditya Arpitha | Building Bridges to Niche Subcultures",
+  title: "Aditya Arpitha | Building Bridges between Niche Subcultures",
   description: "A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.",
   url: "https://adityaarpitha.com",
 
@@ -75,6 +75,8 @@ export const siteConfig = {
   // Feature flags
   features: {
     tinyVaithyaBeta: parseFeatureFlag(process.env.NEXT_PUBLIC_TINY_VAITHYA_BETA),
+    atmosphereDebugPanelBeta: parseFeatureFlag(process.env.NEXT_PUBLIC_ATMOSPHERE_DEBUG_PANEL_BETA),
+    circadianBackgroundBeta: parseFeatureFlag(process.env.NEXT_PUBLIC_CIRCADIAN_BACKGROUND_BETA),
   },
 
   // Content

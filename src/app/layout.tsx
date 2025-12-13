@@ -13,19 +13,22 @@ import { siteConfig } from '@/lib/config'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Aditya Arpitha | Building Bridges to Niche Subcultures',
+  title: 'Aditya Arpitha | Building Bridges between Niche Subcultures',
   description: 'A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.',
   keywords: ['portfolio', 'design', 'philosophy', 'dharma', 'culture', 'tools'],
   authors: [{ name: 'Aditya Arpitha' }],
+  icons: {
+    icon: '/favicon.svg',
+  },
   openGraph: {
-    title: 'Aditya Arpitha | Building Bridges to Niche Subcultures',
+    title: 'Aditya Arpitha | Building Bridges between Niche Subcultures',
     description: 'A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.',
     type: 'website',
     locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Aditya Arpitha | Building Bridges to Niche Subcultures',
+    title: 'Aditya Arpitha | Building Bridges between Niche Subcultures',
     description: 'A crafted place to meet niche subcultures with care—tools, essays, and rituals for building culture on purpose.',
   },
 }
@@ -50,16 +53,16 @@ export default function RootLayout({
         <AtmosphereProvider>
           <LensProvider>
             <div className="min-h-screen relative">
-              {/* Time-aware atmospheric background */}
-              <CircadianBackground />
+              {/* Time-aware atmospheric background (beta) */}
+              {siteConfig.features.circadianBackgroundBeta && <CircadianBackground />}
               {/* Wandering dharma wheel in background */}
               <WanderingDharmaWheel />
               {/* Tiny Vaithya mascot (beta) */}
               {siteConfig.features.tinyVaithyaBeta ? <TinyVaithya /> : null}
               {children}
               <Footer />
-              {/* Debug panel - toggle with Alt+D */}
-              <AtmosphereDebugPanel />
+              {/* Atmosphere debug panel (beta) */}
+              {siteConfig.features.atmosphereDebugPanelBeta ? <AtmosphereDebugPanel /> : null}
             </div>
           </LensProvider>
         </AtmosphereProvider>

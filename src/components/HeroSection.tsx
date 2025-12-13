@@ -18,8 +18,9 @@ export default function HeroSection() {
             <span className="block leading-tight">
               {content.hero.title.main}
             </span>
-            <span className="block mt-4 md:mt-6 leading-tight text-dharma-400 font-normal">
-              {content.hero.title.highlight}
+            <span className="block mt-4 md:mt-6 leading-tight">
+              <span className="text-dharma-400 font-normal">{content.hero.title.highlight}</span>
+              {content.hero.title.suffix && <span className="text-zen-50 font-normal"> {content.hero.title.suffix}</span>}
             </span>
           </h1>
 
