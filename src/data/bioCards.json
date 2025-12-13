@@ -58,13 +58,13 @@
         "id": "mountain-training",
         "title": "Mountains help me run cool",
         "summary": "I spent more than a month training at the National Institute of Mountaineering and Adventure Sports (NIMAS). It was the last course of 2024 before it became too cold and dangerous to traverse the passes. Elites from the army, navy, and airforce were selected to join this course where skills like climbing up sheer faces of rock cliffs, and ice glaciers and rescuing people stuck in crevices were taught at 16500 feet above sea level. I stayed in army barracks on the border between China and India before going camping in tents. Other treks I enjoyed include Deoriatal Chandrashila, Kedar Tal, etc.",
-        "image": ["/images/bio/mountain.jpg", "/images/bio/summit-sunglasses.jpg", "/images/bio/hiking.jpg"]
+        "images": ["/images/bio/mountain.jpg", "/images/bio/summit-sunglasses.jpg", "/images/bio/hiking.jpg"]
       },
       {
         "id": "global-travel",
         "title": "Travelling to diverse environments",
         "summary": "Over my life, I have had the opportunity to see many parts of the world. I have gone on road trips around Ireland, all the way from Dublin to the Cliffs of Moher. I got to see the world's largest tree when I went camping at Sequoia National Park in California. Driving around the Lake District UK and other remote parts of the countryside remains my fond memory. Notable mentions include eating watermelons from Georgia, listening to Minami sing in Fukuoka, Japan, a road trip from the coolest freshwater Lake Michigan to Bentonville, Arkansas, the clean ocean off Tanzania, taking the ropeway to the Tian Tan Buddha in Hong Kong, sunrise after cross country skiing in Vermont and many more. I’d love to hear your suggestions for magical places around the world worth visiting.",
-        "image": ["/images/bio/waterfall.jpg", "/images/bio/explaining-sitting-in-oxford.jpg"]
+        "images": ["/images/bio/waterfall.jpg", "/images/bio/explaining-sitting-in-oxford.jpg"]
       },
       {
         "id": "audiophile",
@@ -101,8 +101,8 @@
       {
         "id": "cuteness",
         "title": "I love cuddles",
-        "summary": "If I get my hands on cute animals, I will spend a lot of time playing with them. Please send all kittens and puppies my way!",
-        "image": "/images/bio/puppy.jpg"
+        "summary": "If I get my hands on cute animals, I will not give any human attention. Be warned and send all kittens and puppies my way!",
+        "images": ["/images/bio/puppy.jpg", "/images/bio/kitten.png"]
       }
     ]
   }
