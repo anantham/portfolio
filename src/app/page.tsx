@@ -1,7 +1,7 @@
 import HeroSection from '@/components/HeroSection'
 import AudienceLenses from '@/components/AudienceLenses'
 import ProjectsShowcase from '@/components/ProjectsShowcase'
-import WritingSection from '@/components/WritingSection'
+// import WritingSection from '@/components/WritingSection'
 import SupportSection from '@/components/SupportSection'
 
 export default function Home() {
@@ -10,7 +10,7 @@ export default function Home() {
       <HeroSection />
       <AudienceLenses />
       <ProjectsShowcase />
-      <WritingSection />
+      {/* <WritingSection /> */}
       <SupportSection />
     </main>
   )
