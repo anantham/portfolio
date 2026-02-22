@@ -172,7 +172,7 @@ export default function AudienceLenses() {
     defaultBioOrder.map(lens => ({
       lens,
       card: bioCards[lens][0],
-      image: getRandomBioCardImage(bioCards[lens][0])
+      image: bioCards[lens][0].images[0] ?? '/images/bio/waterfall.jpg'
     }))
   ), [])
 
@@ -296,6 +296,7 @@ export default function AudienceLenses() {
                       fill
                       className="object-contain"
                       sizes="(min-width: 1280px) 45vw, (min-width: 768px) 50vw, 100vw"
+                      priority={index === 0}
                     />
                     <div className={`absolute inset-0 pointer-events-none bg-gradient-to-tr ${meta.gradient} opacity-40`} />
                     <div className="absolute top-4 left-4">
