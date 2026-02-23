@@ -11,6 +11,7 @@
 
 # next.js
 /.next/
+/.next.old*/
 /out/
 
 # production
@@ -43,3 +44,6 @@ WORKLOG.md
 # Generated visualizations
 visualizations/
 CLAUDE.md
+
+# Claude Code
+.claude/
