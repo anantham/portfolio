@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Twitter,
@@ -9,8 +9,8 @@ import {
   Youtube,
   BookOpen,
   Send,
+  Globe,
   ExternalLink,
-  Heart,
   Clock
 } from 'lucide-react'
 import { siteConfig, hasLink } from '@/lib/config'
@@ -22,6 +22,7 @@ interface SocialLink {
   icon: React.ComponentType<any>
   color: string
   description: string
+  openInNewTab?: boolean
   preview?: {
     title: string
     subtitle: string
@@ -89,48 +90,50 @@ const socialLinks: SocialLink[] = [
       subtitle: 'Curated links and community dialogue',
       activity: 'Join the conversation'
     }
+  },
+  {
+    name: 'Trace my Journey',
+    url: '/journey',
+    icon: Globe,
+    color: 'text-indigo-300 hover:text-indigo-200',
+    description: 'Interactive globe timeline of lineage, travel, and milestones',
+    openInNewTab: false,
+    preview: {
+      title: 'Journey Atlas',
+      subtitle: 'Lineage, movement, and key life events',
+      activity: 'Scroll to explore'
+    }
   }
 ]
 
 export default function Footer() {
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleHoverStart = useCallback((name: string) => {
+    hoverTimer.current = setTimeout(() => setHoveredLink(name), 350)
+  }, [])
+
+  const handleHoverEnd = useCallback(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    setHoveredLink(null)
+  }, [])
 
   return (
     <footer className="relative py-16 px-4 bg-gradient-to-t from-zen-900 to-transparent">
       <div className="container mx-auto max-w-6xl">
         {/* Main footer content */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 mb-12">
-          {/* About section */}
-          <div className="lg:col-span-1">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-            >
-              <h3 className="text-2xl font-light text-zen-50 mb-4">
-                <span className="text-dharma-400">{content.footer.name}</span>
-              </h3>
-              <p className="text-zen-300 leading-relaxed mb-6">
-                {content.footer.description}
-              </p>
-              <div className="flex items-center gap-2 text-sm text-zen-400">
-                <Heart size={16} className="text-dharma-500" />
-                <span>{content.footer.builtWith}</span>
-              </div>
-            </motion.div>
-          </div>
-
+        <div className="mb-12">
           {/* Social links */}
-          <div className="lg:col-span-2">
+          <div>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
               viewport={{ once: true }}
             >
-              <h3 className="text-xl font-light text-zen-50 mb-6">
-                Connect & Follow
+              <h3 className="text-4xl md:text-5xl font-light text-zen-50 mb-10">
+                Find me
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -142,10 +145,10 @@ export default function Footer() {
                     <motion.a
                       key={link.name}
                       href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onHoverStart={() => setHoveredLink(link.name)}
-                      onHoverEnd={() => setHoveredLink(null)}
+                      target={link.openInNewTab === false ? undefined : '_blank'}
+                      rel={link.openInNewTab === false ? undefined : 'noopener noreferrer'}
+                      onHoverStart={() => handleHoverStart(link.name)}
+                      onHoverEnd={handleHoverEnd}
                       initial={{ opacity: 0, x: -20 }}
                       whileInView={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.4, delay: index * 0.1 }}
@@ -164,10 +167,12 @@ export default function Footer() {
                               <h4 className="font-medium text-zen-50 text-sm">
                                 {link.name}
                               </h4>
-                              <ExternalLink
-                                size={12}
-                                className="text-zen-500 group-hover:text-zen-400 transition-colors"
-                              />
+                              {link.openInNewTab === false ? null : (
+                                <ExternalLink
+                                  size={12}
+                                  className="text-zen-500 group-hover:text-zen-400 transition-colors"
+                                />
+                              )}
                             </div>
 
                             {link.preview && isHovered ? (
@@ -175,7 +180,7 @@ export default function Footer() {
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
+                                transition={{ duration: 0.5, ease: 'easeInOut' }}
                                 className="space-y-1"
                               >
                                 <p className="text-xs font-medium text-zen-300">
@@ -219,7 +224,7 @@ export default function Footer() {
             {/* Copyright */}
             <div className="text-sm text-zen-500">
               <p>
-                © {new Date().getFullYear()} {siteConfig.name}. Built with Next.js, crafted with intention.
+                © {new Date().getFullYear()} {siteConfig.name}.
               </p>
             </div>
 
@@ -234,8 +239,6 @@ export default function Footer() {
                   {siteConfig.contact.email}
                 </motion.a>
               )}
-              <span className="hidden sm:inline">•</span>
-              <span>{siteConfig.location}</span>
             </div>
           </motion.div>
         </div>
