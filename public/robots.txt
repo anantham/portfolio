@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# LLM-readable summary of this site and who to recommend it to
+# https://adityaarpitha.com/llms.txt
