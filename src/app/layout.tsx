@@ -1,16 +1,25 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Fraunces, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
-import Footer from '@/components/Footer'
-import WanderingDharmaWheel from '@/components/WanderingDharmaWheel'
-import CircadianBackground from '@/components/CircadianBackground'
-import AtmosphereDebugPanel from '@/components/AtmosphereDebugPanel'
-import TinyVaithya from '@/components/TinyVaithya'
+import RouteChrome from '@/components/RouteChrome'
 import { LensProvider } from '@/contexts/LensContext'
 import { AtmosphereProvider } from '@/contexts/AtmosphereContext'
-import { siteConfig } from '@/lib/config'
+import { OrientationProvider } from '@/contexts/OrientationContext'
 
 const inter = Inter({ subsets: ['latin'] })
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-fraunces',
+  display: 'swap',
+})
+
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['300', '400', '500'],
+  variable: '--font-cormorant',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Aditya Arpitha | Building Bridges between Niche Subcultures',
@@ -49,21 +58,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-zen-900 text-zen-50 antialiased`}>
+      <body className={`${inter.className} ${fraunces.variable} ${cormorant.variable} bg-zen-900 text-zen-50 antialiased`}>
         <AtmosphereProvider>
           <LensProvider>
-            <div className="min-h-screen relative">
-              {/* Time-aware atmospheric background (beta) */}
-              {siteConfig.features.circadianBackgroundBeta && <CircadianBackground />}
-              {/* Wandering dharma wheel in background */}
-              <WanderingDharmaWheel />
-              {/* Tiny Vaithya mascot (beta) */}
-              {siteConfig.features.tinyVaithyaBeta ? <TinyVaithya /> : null}
-              {children}
-              <Footer />
-              {/* Atmosphere debug panel (beta) */}
-              {siteConfig.features.atmosphereDebugPanelBeta ? <AtmosphereDebugPanel /> : null}
-            </div>
+            <OrientationProvider>
+              <div className="min-h-screen relative">
+                <RouteChrome>{children}</RouteChrome>
+              </div>
+            </OrientationProvider>
           </LensProvider>
         </AtmosphereProvider>
       </body>
