@@ -1,7 +1,7 @@
 {
   "site": {
     "name": "Aditya Arpitha Prasad",
-    "tagline": "My name is Aditya and this website is my attempt to make myself legible",
+    "tagline": "An attempt to make myself legible.",
     "description": "My name Aditya stands for the Sun",
     "quote": {
       "text": "Walking the Middle Way",
@@ -10,8 +10,8 @@
   },
   "footer": {
     "name": "Aditya",
-    "description": "Building bridges between niche subcultures through tools, essays, and rituals. Exploring the intersection of technology, community, and contemplative practice.",
-    "builtWith": "Built with care and intention, aiming for Integrity",
+    "description": "",
+    "builtWith": "",
     "social": {
       "twitter": {
         "url": "https://twitter.com/adityaarpitha",
@@ -49,7 +49,7 @@
     }
   },
   "lenses": {
-    "title": "A few sides of me",
+    "title": "What orients me",
     "subtitle": "",
     "archetypes": [
       {
@@ -83,20 +83,20 @@
     ]
   },
   "projects": {
-    "title": "Things I'm building",
-    "subtitle": "Tools, stories, and research projects that explore the intersection of technology, community, and contemplative practice."
+    "title": "Software that fits",
+    "subtitle": ""
   },
   "writing": {
     "title": "Recent Writing",
-    "subtitle": "Essays exploring the intersection of technology, community, and contemplative practice. Thoughts on building bridges between different ways of knowing."
+    "subtitle": ""
   },
   "support": {
-    "title": "If this work helps,",
-    "highlight": "help it help more people",
-    "subtitle": "Your support whether through sharing, gratitude, resources, or connection—enables this work to reach and serve more communities.",
+    "title": "Dana",
+    "highlight": "",
+    "subtitle": "",
     "closing": {
-      "title": "Building in the open",
-      "text": "It is important that we co-create, hold each other responsible and stay in relation to each other. We are all in this together so I would love to cultivate a thriving community."
+      "title": "",
+      "text": ""
     }
   },
       "physics": {
@@ -198,6 +198,88 @@
             "lw-math": { "strategy": "lw-flow" },
             "embodied": { "strategy": "embodied-zen" },
             "buddhist": { "strategy": "buddhist-zen" }
+          },
+          "defaultUnoriented": {
+            "strategy": "buddhist-zen",
+            "parameters": {
+              "orbitCenterX": 0.5,
+              "orbitCenterY": 0.45,
+              "orbitRadius": 300,
+              "orbitMinRadius": 240,
+              "orbitRadiusDriftAmp": 40,
+              "orbitRadiusDriftHz": 0.006,
+              "orbitBuildUpAmp": 0,
+              "orbitBuildUpPeriod": 0,
+              "orbitRadialGain": 0.07,
+              "orbitTangentialSpeed": 28,
+              "orbitBlend": 0.5,
+              "minTurnRate": 0.03,
+              "turnPersistence": 36,
+              "turnJitter": 0.005,
+              "turnCentering": 0.12
+            }
+          },
+          "orientationProfiles": {
+            "being": {
+              "strategy": "buddhist-zen",
+              "parameters": {
+                "orbitCenterX": 0.5,
+                "orbitCenterY": 0.38,
+                "orbitRadius": 340,
+                "orbitMinRadius": 270,
+                "orbitRadiusDriftAmp": 55,
+                "orbitRadiusDriftHz": 0.0042,
+                "orbitBuildUpAmp": 0,
+                "orbitBuildUpPeriod": 0,
+                "orbitRadialGain": 0.06,
+                "orbitTangentialSpeed": 20,
+                "orbitBlend": 0.48,
+                "minTurnRate": 0.03,
+                "turnPersistence": 40,
+                "turnJitter": 0.004,
+                "turnCentering": 0.1
+              }
+            },
+            "doing": {
+              "strategy": "embodied-zen",
+              "parameters": {
+                "orbitCenterX": 0.58,
+                "orbitCenterY": 0.52,
+                "orbitRadius": 230,
+                "orbitMinRadius": 200,
+                "orbitRadiusDriftAmp": 20,
+                "orbitRadiusDriftHz": 0.014,
+                "orbitBuildUpAmp": 0,
+                "orbitBuildUpPeriod": 0,
+                "orbitRadialGain": 0.16,
+                "orbitTangentialSpeed": 68,
+                "orbitBlend": 0.68,
+                "minTurnRate": 0.12,
+                "turnPersistence": 12,
+                "turnJitter": 0.012,
+                "turnCentering": 0.35
+              }
+            },
+            "becoming": {
+              "strategy": "embodied-zen",
+              "parameters": {
+                "orbitCenterX": 0.44,
+                "orbitCenterY": 0.62,
+                "orbitRadius": 240,
+                "orbitMinRadius": 210,
+                "orbitRadiusDriftAmp": 15,
+                "orbitRadiusDriftHz": 0.009,
+                "orbitBuildUpAmp": 110,
+                "orbitBuildUpPeriod": 45,
+                "orbitRadialGain": 0.13,
+                "orbitTangentialSpeed": 42,
+                "orbitBlend": 0.62,
+                "minTurnRate": 0.07,
+                "turnPersistence": 22,
+                "turnJitter": 0.008,
+                "turnCentering": 0.28
+              }
+            }
           }
         }
       },

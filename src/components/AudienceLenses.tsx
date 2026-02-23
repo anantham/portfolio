@@ -1,157 +1,80 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useState, useEffect, forwardRef } from 'react'
 import type { ReactNode } from 'react'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
-import { Brain, Code, Heart, Flower } from 'lucide-react'
-import { content, type LensId } from '@/lib/content'
-import { useLens } from '@/contexts/LensContext'
-import { bioCards, defaultBioOrder, getRandomBioCard, getRandomBioCardImage, bioLinks, type BioCard } from '@/lib/bio'
+import { motion, AnimatePresence } from 'framer-motion'
+import type { ComponentType } from 'react'
+import { Wind, Flame, Sprout, ChevronDown } from 'lucide-react'
+import orientationData from '@/data/orientationCards.json'
+import bioLinksData from '@/data/bioLinks.json'
+import content from '@/data/content.json'
+import { useOrientation, type OrientationCategory } from '@/contexts/OrientationContext'
 
-interface LensMeta {
-  id: LensId
+type Category = OrientationCategory
+
+interface OrientationCardData {
+  id: string
   title: string
-  subtitle: string
-  icon: React.ComponentType<{ size?: number | string }>
+  summary: string
+  images: string[]
+}
+
+const categoryConfig: Record<Category, {
+  label: string
+  Icon: ComponentType<{ size?: number | string; className?: string }>
   accent: string
+  pillActive: string
   gradient: string
-}
-
-const iconMap: Record<LensId, React.ComponentType<{ size?: number | string }>> = {
-  'lw-math': Brain,
-  'engineer': Code,
-  'embodied': Heart,
-  'buddhist': Flower
-}
-
-const gradientMap: Record<LensId, { accent: string; gradient: string }> = {
-  'lw-math': {
-    accent: 'text-blue-300',
-    gradient: 'from-blue-500/25 to-cyan-500/15'
+}> = {
+  being: {
+    label: 'Being',
+    Icon: Wind,
+    accent: 'text-sky-300',
+    pillActive: 'bg-sky-500/20 border-sky-400/50 text-sky-200',
+    gradient: 'from-sky-500/20 to-blue-500/10'
   },
-  'engineer': {
+  doing: {
+    label: 'Doing',
+    Icon: Flame,
+    accent: 'text-orange-300',
+    pillActive: 'bg-orange-500/20 border-orange-400/50 text-orange-200',
+    gradient: 'from-orange-500/20 to-amber-500/10'
+  },
+  becoming: {
+    label: 'Becoming',
+    Icon: Sprout,
     accent: 'text-emerald-300',
-    gradient: 'from-emerald-500/25 to-green-500/15'
-  },
-  'embodied': {
-    accent: 'text-rose-300',
-    gradient: 'from-rose-500/25 to-pink-500/15'
-  },
-  'buddhist': {
-    accent: 'text-dharma-300',
-    gradient: 'from-dharma-500/25 to-amber-500/15'
+    pillActive: 'bg-emerald-500/20 border-emerald-400/50 text-emerald-200',
+    gradient: 'from-emerald-500/20 to-green-500/10'
   }
 }
 
-interface DisplayCard {
-  lens: LensId
-  card: BioCard
-  image: string
-}
+const linkedPhrases = bioLinksData.map(link => ({ phrase: link.phrase.trim(), href: link.href }))
 
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items]
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[copy[i], copy[j]] = [copy[j], copy[i]]
-  }
-  return copy
-}
-
-function selectRandomBioCardsWithUniqueImages(lenses: LensId[]): DisplayCard[] {
-  const lensesWithOptions = lenses.map(lens => {
-    const cards = shuffle(bioCards[lens])
-    const candidates = shuffle(
-      cards.flatMap(card => shuffle(card.images).map(image => ({ card, image })))
-    )
-    return {
-      lens,
-      candidates,
-      uniqueImageCount: new Set(candidates.map(candidate => candidate.image)).size
-    }
-  })
-
-  const orderedForSearch = [...lensesWithOptions].sort((a, b) => a.uniqueImageCount - b.uniqueImageCount)
-  const selectedCards = new Map<LensId, { card: BioCard; image: string }>()
-  const usedImages = new Set<string>()
-
-  const backtrack = (index: number): boolean => {
-    if (index >= orderedForSearch.length) return true
-
-    const { lens, candidates } = orderedForSearch[index]
-    for (const candidate of candidates) {
-      if (usedImages.has(candidate.image)) continue
-      selectedCards.set(lens, candidate)
-      usedImages.add(candidate.image)
-
-      if (backtrack(index + 1)) return true
-
-      usedImages.delete(candidate.image)
-      selectedCards.delete(lens)
-    }
-
-    return false
-  }
-
-  if (!backtrack(0)) {
-    return lenses.map(lens => {
-      const card = getRandomBioCard(lens)
-      return { lens, card, image: getRandomBioCardImage(card) }
-    })
-  }
-
-  return lenses.map(lens => {
-    const selected = selectedCards.get(lens)!
-    return { lens, card: selected.card, image: selected.image }
-  })
-}
-
-const escapeRegExp = (value: string) => {
-  const specials = new Set(['\\', '^', '$', '*', '+', '?', '.', '(', ')', '|', '{', '}', '[', ']'])
-  let escaped = ''
-  for (const char of value) {
-    escaped += specials.has(char) ? `\\${char}` : char
-  }
-  return escaped
-}
-
-const linkedPhrases = bioLinks.map(link => ({
-  phrase: link.phrase.trim(),
-  href: link.href
-}))
-
-const renderSummary = (text: string): ReactNode => {
+function renderSummary(text: string): ReactNode {
   let nodes: ReactNode[] = [text]
   let keyIndex = 0
 
   linkedPhrases.forEach(link => {
     const phrase = link.phrase
     if (!phrase) return
-    const regex = new RegExp(escapeRegExp(phrase), 'g')
+    const escaped = phrase.replace(/[\\^$*+?.()|{}[\]]/g, '\\$&')
+    const regex = new RegExp(escaped, 'g')
 
     nodes = nodes.flatMap(node => {
       if (typeof node !== 'string') return [node]
-      if (!regex.test(node)) {
-        regex.lastIndex = 0
-        return [node]
-      }
-
+      regex.lastIndex = 0
+      if (!regex.test(node)) { regex.lastIndex = 0; return [node] }
       regex.lastIndex = 0
       const parts = node.split(regex)
       const segments: ReactNode[] = []
       parts.forEach((part, idx) => {
         if (part) segments.push(part)
         if (idx < parts.length - 1) {
-          const linkKey = `bio-link-${phrase}-${keyIndex++}`
           segments.push(
-            <a
-              key={linkKey}
-              href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-dharma-300 underline-offset-4 hover:text-dharma-200 hover:underline"
-            >
+            <a key={`bl-${phrase}-${keyIndex++}`} href={link.href} target="_blank" rel="noopener noreferrer"
+              className="text-dharma-300 underline-offset-4 hover:text-dharma-200 hover:underline">
               {phrase}
             </a>
           )
@@ -161,89 +84,126 @@ const renderSummary = (text: string): ReactNode => {
     })
   })
 
-  return nodes.map((node, idx) => (typeof node === 'string' ? <span key={`bio-frag-${idx}`}>{node}</span> : node))
+  return nodes.map((node, idx) => typeof node === 'string' ? <span key={`bf-${idx}`}>{node}</span> : node)
 }
 
+function CyclingImage({ images, title, priority }: { images: string[]; title: string; priority?: boolean }) {
+  const [currentIndex, setCurrentIndex] = useState(0)
+
+  useEffect(() => {
+    if (images.length <= 1) return
+    const interval = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % images.length)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [images.length])
+
+  const src = images[currentIndex] ?? '/images/bio/waterfall.jpg'
+
+  return (
+    <div className="relative w-full aspect-[4/3] overflow-hidden bg-zen-950/40">
+      <AnimatePresence mode="sync">
+        <motion.div
+          key={src}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.8 }}
+          className="absolute inset-0"
+        >
+          <Image
+            src={src}
+            alt={title}
+            fill
+            className="object-contain"
+            sizes="(min-width: 1280px) 30vw, (min-width: 768px) 45vw, 100vw"
+            priority={priority}
+          />
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+const OrientationCard = forwardRef<HTMLDivElement, {
+  card: OrientationCardData
+  category: Category
+  priority?: boolean
+}>(function OrientationCard({
+  card,
+  category,
+  priority
+}, ref) {
+  const [expanded, setExpanded] = useState(false)
+  const config = categoryConfig[category]
+  const Icon = config.Icon
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10, scale: 0.97 }}
+      transition={{ duration: 0.35 }}
+      className="rounded-2xl border border-zen-700/50 overflow-hidden bg-zen-950/60 backdrop-blur"
+    >
+      <button
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full text-left group"
+      >
+      <div className={`relative bg-gradient-to-br ${config.gradient}`}>
+        <CyclingImage images={card.images} title={card.title} priority={priority} />
+        <div className="absolute top-3 left-3">
+          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-zen-950/70 backdrop-blur text-xs font-medium ${config.accent} ring-1 ring-zen-800/60`}>
+            <Icon size={12} />
+            {config.label}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-5">
+        <h3 className="text-base font-medium text-zen-50 mb-3 leading-snug">
+          {card.title}
+        </h3>
+
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              key="summary"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="overflow-hidden"
+            >
+              <p className="text-sm text-zen-300 leading-relaxed mb-3">
+                {renderSummary(card.summary)}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <motion.span
+          animate={{ rotate: expanded ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          className={`inline-flex ${config.accent} opacity-40 group-hover:opacity-80 transition-opacity`}
+        >
+          <ChevronDown size={14} />
+        </motion.span>
+      </div>
+      </button>
+    </motion.div>
+  )
+})
+
 export default function AudienceLenses() {
-  const { selectedLens, setSelectedLens } = useLens()
-  const [viewMode, setViewMode] = useState<'mix' | 'uniform'>('mix')
-  const [uniformLens, setUniformLens] = useState<LensId | null>(null)
-  const initialMixCards = useMemo(() => (
-    defaultBioOrder.map(lens => ({
-      lens,
-      card: bioCards[lens][0],
-      image: bioCards[lens][0].images[0] ?? '/images/bio/waterfall.jpg'
-    }))
-  ), [])
+  const { activeCategory, setActiveCategory } = useOrientation()
+  const categories = orientationData.categories as Category[]
+  const cards = orientationData.cards as Record<Category, OrientationCardData[]>
 
-  const [mixCards, setMixCards] = useState<DisplayCard[]>(initialMixCards)
-
-  const lensMap = useMemo<Record<LensId, LensMeta>>(() => {
-    return content.lenses.archetypes.reduce((acc, archetype) => {
-      acc[archetype.id] = {
-        id: archetype.id,
-        title: archetype.title,
-        subtitle: archetype.subtitle,
-        icon: iconMap[archetype.id],
-        ...gradientMap[archetype.id]
-      }
-      return acc
-    }, {} as Record<LensId, LensMeta>)
-  }, [])
-
-  const regenerateMix = useCallback(() => {
-    const lenses = shuffle(defaultBioOrder)
-    setMixCards(selectRandomBioCardsWithUniqueImages(lenses))
-  }, [])
-
-  useEffect(() => {
-    regenerateMix()
-  }, [regenerateMix])
-
-  useEffect(() => {
-    if (selectedLens && selectedLens !== 'engineer') {
-      setViewMode('uniform')
-      setUniformLens(selectedLens)
-    }
-  }, [selectedLens])
-
-  const activeLens: LensId = useMemo(() => {
-    if (viewMode === 'uniform') {
-      return uniformLens ?? selectedLens ?? 'engineer'
-    }
-    return selectedLens ?? 'engineer'
-  }, [selectedLens, uniformLens, viewMode])
-
-  const uniformCards = useMemo<DisplayCard[]>(() => {
-    if (viewMode !== 'uniform') return []
-    return bioCards[activeLens].map(card => ({
-      lens: activeLens,
-      card,
-      image: getRandomBioCardImage(card)
-    }))
-  }, [activeLens, viewMode])
-
-  const handleCardClick = (lens: LensId) => {
-    if (viewMode === 'mix') {
-      setViewMode('uniform')
-      setUniformLens(lens)
-      setSelectedLens(lens)
-    } else {
-      if (uniformLens === lens) {
-        setViewMode('mix')
-        setUniformLens(null)
-        setSelectedLens('engineer')
-        regenerateMix()
-      } else {
-        setUniformLens(lens)
-        setSelectedLens(lens)
-      }
-    }
-  }
-
-  const cardsToDisplay: DisplayCard[] = viewMode === 'uniform'
-    ? uniformCards
-    : mixCards
+  const displayCards: Array<{ card: OrientationCardData; category: Category }> = activeCategory
+    ? cards[activeCategory].map(card => ({ card, category: activeCategory }))
+    : categories.map(cat => ({ card: cards[cat][0], category: cat }))
 
   return (
     <section id="lenses-section" className="py-20 px-4">
@@ -253,72 +213,51 @@ export default function AudienceLenses() {
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-12"
         >
-          <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-6">
+          <h2 className="text-4xl md:text-5xl font-light text-zen-50 mb-8">
             {content.lenses.title}
           </h2>
-          {content.lenses.subtitle ? (
-            <p className="text-lg text-zen-300 max-w-3xl mx-auto">
-              {content.lenses.subtitle}
-            </p>
-          ) : null}
+
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            {categories.map(cat => {
+              const config = categoryConfig[cat]
+              const CatIcon = config.Icon
+              const isActive = activeCategory === cat
+
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(isActive ? null : cat)}
+                  className={`
+                    inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium
+                    transition-all duration-200
+                    ${isActive
+                      ? config.pillActive
+                      : 'border-zen-700/50 text-zen-400 hover:border-zen-600/70 hover:text-zen-300'
+                    }
+                  `}
+                >
+                  <CatIcon size={15} />
+                  {config.label}
+                </button>
+              )
+            })}
+          </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {cardsToDisplay.map(({ lens, card, image }, index) => {
-            const meta = lensMap[lens]
-            const Icon = meta.icon
-            const isActive = viewMode === 'uniform' && activeLens === lens
-
-            return (
-              <motion.div
-                key={`${lens}-${card.id}`}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.08 }}
-                viewport={{ once: true }}
-                className="relative"
-              >
-                <motion.button
-                  type="button"
-                  onClick={() => handleCardClick(lens)}
-                  whileHover={{ y: -8, scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  className={`group flex h-full flex-col overflow-hidden rounded-3xl border border-zen-800/60 bg-zen-950/60 backdrop-blur focus:outline-none transition-all duration-500 ${isActive ? 'ring-2 ring-dharma-400/50 shadow-[0_0_28px_rgba(255,193,79,0.22)]' : 'hover:border-zen-600/50'}`}
-                >
-                  <div
-                    className={`relative w-full overflow-hidden bg-zen-950/40 aspect-[4/3]`}
-                  >
-                    <Image
-                      src={image}
-                      alt={card.title}
-                      fill
-                      className="object-contain"
-                      sizes="(min-width: 1280px) 45vw, (min-width: 768px) 50vw, 100vw"
-                      priority={index === 0}
-                    />
-                    <div className={`absolute inset-0 pointer-events-none bg-gradient-to-tr ${meta.gradient} opacity-40`} />
-                    <div className="absolute top-4 left-4">
-                      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full bg-zen-950/70 backdrop-blur ring-1 ring-zen-800/60 ${meta.accent}`}>
-                        <Icon size={18} />
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 p-6">
-                    <h3 className="text-xl font-semibold text-zen-50 mb-3">
-                      {card.title}
-                    </h3>
-                    <p className="text-sm text-zen-200 leading-relaxed">
-                      {renderSummary(card.summary)}
-                    </p>
-                  </div>
-                </motion.button>
-              </motion.div>
-            )
-          })}
-        </div>
+        <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+          <AnimatePresence mode="popLayout">
+            {displayCards.map(({ card, category }, index) => (
+              <OrientationCard
+                key={card.id}
+                card={card}
+                category={category}
+                priority={index === 0}
+              />
+            ))}
+          </AnimatePresence>
+        </motion.div>
       </div>
     </section>
   )

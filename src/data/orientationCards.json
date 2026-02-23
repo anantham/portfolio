@@ -1,0 +1,65 @@
+{
+  "categories": ["being", "doing", "becoming"],
+  "cards": {
+    "being": [
+      {
+        "id": "contemplative",
+        "title": "Contemplative Practice",
+        "summary": "Completed Goenka Vipassana retreat and was awarded the MAPLE AI fellowship — 4+ hours of daily meditation, monthly week-long isolation periods for 5 months. This has made me very motivated to bridge contemplative practice with empirical approaches to consciousness and alignment.",
+        "images": ["/images/bio/monastic-robes.jpg"]
+      },
+      {
+        "id": "music",
+        "title": "Music moves me",
+        "summary": "It was at Yodobashi, the largest electronics store in Japan, that I first listened to SE846. Tears fell out of my eyes as I realised I had never really listened to my favourite songs before. The clarity and fidelity of In-Ear Monitors have left me a devoted listener ever since. Some of my best experiences in this life have been hearing TOOL play live in LA. Jazz in Bangalore by indie artists who put their soul into it. Jacob Collier visiting my city. Instrumental music on the handpan or piano adaptations are also among my deepest joys.",
+        "images": ["/images/bio/audiophile.png", "/images/bio/tool.jpg"]
+      },
+      {
+        "id": "travel",
+        "title": "The self you leave behind",
+        "summary": "Road trips around Ireland all the way to the Cliffs of Moher. Camping at Sequoia National Park. The Lake District. Eating watermelons from Georgia. Listening to Minami sing in Fukuoka. Sunrise after cross-country skiing in Vermont. I'd love to hear your suggestions for magical places worth visiting.",
+        "images": ["/images/bio/waterfall.jpg", "/images/bio/explaining-sitting-in-oxford.jpg"]
+      }
+    ],
+    "doing": [
+      {
+        "id": "ooty",
+        "title": "Ooty Alignment Retreat",
+        "summary": "Me and Bhishma run the Ooty Alignment Retreats. You can read our report on the 2025 v2 here.",
+        "images": ["/images/bio/ooty.jpg"]
+      },
+      {
+        "id": "residency",
+        "title": "Groundless Alignment Residency",
+        "summary": "Me and Harshit ran the three-week residency programme for the AISC 2025 fellows in Goa. We had a lot of fun and made real progress in planning out the AISC tracks for 2026.",
+        "images": ["/images/bio/goa.jpg"]
+      },
+      {
+        "id": "manifund",
+        "title": "Distributing Fanfics Across India",
+        "summary": "I raised funds on Manifund and from CEA to distribute hundreds of copies of HPMOR (pull form) across India. Crowd funding is a superb method of getting focused projects off the ground.",
+        "images": ["/images/bio/hpmor.jpg"]
+      }
+    ],
+    "becoming": [
+      {
+        "id": "mountains",
+        "title": "Cold clarity",
+        "summary": "I spent more than a month training at the National Institute of Mountaineering and Adventure Sports (NIMAS). It was the last course of 2024 before it became too cold and dangerous to traverse the passes. Elites from the army, navy, and airforce were selected to join this course where skills like climbing up sheer faces of rock cliffs, and ice glaciers and rescuing people stuck in crevices were taught at 16500 feet above sea level. I stayed in army barracks on the border between China and India before going camping in tents. Other treks I enjoyed include Deoriatal Chandrashila, Kedar Tal, etc.",
+        "images": ["/images/bio/mountain.jpg", "/images/bio/summit-sunglasses.jpg", "/images/bio/hiking.jpg"]
+      },
+      {
+        "id": "second-brain",
+        "title": "Second Brain on Obsidian",
+        "summary": "I have taken workshops on how to structure notes, optimize retrieval, integrate knowledge management systems. My Obsidian vault is my digital garden where I can walk around in my mind palace (in VR), to manage via local AI models to automate workflows. Notion has also been a companion in my research work, keeping track of investments, hobbies, and travels. I started the Second Brain telegram group in Bangalore, so hit me up and we can meet up in person and share tips!",
+        "images": ["/images/bio/obsidian.png"]
+      },
+      {
+        "id": "academic",
+        "title": "How I got here",
+        "summary": "NIT Trichy (instrumentation engineering) → Stanford (data science) → IISc PhD with the Prime Minister's Research Fellowship → dropped out to work on alignment. Each step was toward the most important system to get right.",
+        "images": ["/images/bio/newspaper.jpg"]
+      }
+    ]
+  }
+}
