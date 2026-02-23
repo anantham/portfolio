@@ -1,12 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion, useMotionValue, animate } from 'framer-motion'
 import { useMousePosition } from '@/hooks/useMousePosition'
 import { useMotionStrategy } from '@/hooks/useMotionStrategy'
 import { getWheelMotionProfile } from '@/lib/content'
 import { useLens } from '@/contexts/LensContext'
+import { useOrientation } from '@/contexts/OrientationContext'
 import DharmaWheel from '@/components/DharmaWheel'
+
+const HERO_SIZE = 160
+const AWAKEN_TIMEOUT_MS = 10000
 
 interface WanderingDharmaWheelProps {
   size?: number
@@ -22,45 +26,110 @@ export default function WanderingDharmaWheel({
   disabled = false
 }: WanderingDharmaWheelProps) {
   const { selectedLens } = useLens()
-  const profile = useMemo(() => getWheelMotionProfile(selectedLens), [selectedLens])
-  const wheelSize = size ?? profile.visual.size
+  const { activeCategory } = useOrientation()
+  const profile = useMemo(
+    () => getWheelMotionProfile(selectedLens, activeCategory),
+    [selectedLens, activeCategory]
+  )
+  const targetSize = size ?? profile.visual.size
   const wheelOpacity = opacity ?? profile.visual.opacity
 
+  // ── Mount guard — prevent SSR position flash (window undefined on server) ────
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  // ── Awakening state (declared early so strategy can use it) ──────────────────
+  const [awakened, setAwakened] = useState(false)
+  // True for ~3s after awakening so we use a slow spring for the initial drift
+  const [isTransitioning, setIsTransitioning] = useState(false)
+
+  // Animated size: starts at HERO_SIZE, shrinks to targetSize on awakening
+  const sizeMotionValue = useMotionValue(HERO_SIZE)
+  const [renderSize, setRenderSize] = useState(HERO_SIZE)
+
+  // Stable viewport center — used for hero position and strategy seed
+  const viewportCenter = useMemo(() => ({
+    x: typeof window !== 'undefined' ? window.innerWidth / 2 : 400,
+    y: typeof window !== 'undefined' ? window.innerHeight / 2 : 300,
+  }), [])
+
+  // Strategy is disabled until awakening so it initialises at viewportCenter
+  // (not at the top-left corner) the moment it first runs
   const strategyConfig = useMemo(() => {
-    if (baseSpeed !== undefined) {
-      return { ...profile.parameters, baseSpeed }
-    }
-    return profile.parameters
-  }, [profile.parameters, baseSpeed])
+    const base = baseSpeed !== undefined
+      ? { ...profile.parameters, baseSpeed }
+      : profile.parameters
+    return { ...base, initialX: viewportCenter.x, initialY: viewportCenter.y }
+  }, [profile.parameters, baseSpeed, viewportCenter])
 
   const mousePosition = useMousePosition()
   const { position } = useMotionStrategy({
     strategyType: profile.strategy.type,
     config: strategyConfig,
     mousePosition: disabled ? null : mousePosition,
-    disabled
+    disabled: disabled || !awakened
   })
 
-  const clampedPosition = useMemo(() => {
-    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : wheelSize
-    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : wheelSize
-    const pad = wheelSize / 2
-    return {
-      x: Math.max(pad, Math.min(viewportWidth - pad, position.x)),
-      y: Math.max(pad, Math.min(viewportHeight - pad, position.y))
+  useEffect(() => {
+    return sizeMotionValue.on('change', (v) => setRenderSize(Math.round(v)))
+  }, [sizeMotionValue])
+
+  useEffect(() => {
+    if (awakened || disabled) return
+
+    const doAwaken = () => {
+      setAwakened(true)
+      setIsTransitioning(true)
+      // Shrink the wheel smoothly
+      animate(sizeMotionValue, targetSize, { duration: 2.5, ease: 'easeInOut' })
+      // After the wheel has settled, switch back to fast linear tracking
+      const t = setTimeout(() => setIsTransitioning(false), 3000)
+      return () => clearTimeout(t)
     }
-  }, [position.x, position.y, wheelSize])
 
-  const clampedX = clampedPosition.x
-  const clampedY = clampedPosition.y
+    const timer = setTimeout(doAwaken, AWAKEN_TIMEOUT_MS)
+    window.addEventListener('mousemove', doAwaken, { once: true })
+    window.addEventListener('touchstart', doAwaken, { once: true })
+    window.addEventListener('wheel', doAwaken, { once: true })
+    window.addEventListener('scroll', doAwaken, { once: true })
 
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('mousemove', doAwaken)
+      window.removeEventListener('touchstart', doAwaken)
+      window.removeEventListener('wheel', doAwaken)
+      window.removeEventListener('scroll', doAwaken)
+    }
+  }, [awakened, disabled, targetSize, sizeMotionValue])
+
+  // ── Position ─────────────────────────────────────────────────────────────────
+  // Hero mode: fixed at viewport center. Wandering mode: follow the strategy.
+  // Guard against the strategy's {x:0, y:0} initial state — for the one render
+  // cycle before the strategy effect runs, position is still zeroed; using it
+  // would snap the wheel to the top-left corner and draw a jarring trace line.
+  const strategyReady = position.x !== 0 || position.y !== 0
+  const effectiveX = awakened && strategyReady ? position.x : viewportCenter.x
+  const effectiveY = awakened && strategyReady ? position.y : viewportCenter.y
+
+  const clampedX = useMemo(() => {
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : renderSize
+    const pad = renderSize / 2
+    return Math.max(pad, Math.min(viewportWidth - pad, effectiveX))
+  }, [effectiveX, renderSize])
+
+  const clampedY = useMemo(() => {
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : renderSize
+    const pad = renderSize / 2
+    return Math.max(pad, Math.min(viewportHeight - pad, effectiveY))
+  }, [effectiveY, renderSize])
+
+  // ── Trace canvas ─────────────────────────────────────────────────────────────
   const traceCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const samplesRef = useRef<Array<{ x: number; y: number; time: number }>>([])
 
   useEffect(() => {
     const canvas = traceCanvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -80,12 +149,15 @@ export default function WanderingDharmaWheel({
 
     resize()
     window.addEventListener('resize', resize)
-    return () => {
-      window.removeEventListener('resize', resize)
-    }
+    return () => window.removeEventListener('resize', resize)
   }, [])
 
   useEffect(() => {
+    if (!awakened) return // don't draw trace in hero mode
+    const reduceMotion = typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) return
+
     const canvas = traceCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -93,8 +165,21 @@ export default function WanderingDharmaWheel({
 
     const now = performance.now() / 1000
     const fadeWindow = 20
-    samplesRef.current.push({ x: clampedX, y: clampedY, time: now })
-    samplesRef.current = samplesRef.current.filter(sample => now - sample.time <= fadeWindow)
+    const minSampleDistance = 2.5
+    const minSampleInterval = 1 / 45
+    const lastSample = samplesRef.current[samplesRef.current.length - 1]
+    if (!lastSample) {
+      samplesRef.current.push({ x: clampedX, y: clampedY, time: now })
+    } else {
+      const dx = clampedX - lastSample.x
+      const dy = clampedY - lastSample.y
+      const movedEnough = (dx * dx + dy * dy) >= (minSampleDistance * minSampleDistance)
+      const waitedEnough = (now - lastSample.time) >= minSampleInterval
+      if (movedEnough && waitedEnough) {
+        samplesRef.current.push({ x: clampedX, y: clampedY, time: now })
+      }
+    }
+    samplesRef.current = samplesRef.current.filter(s => now - s.time <= fadeWindow)
 
     const dpr = window.devicePixelRatio || 1
     const width = canvas.width / dpr
@@ -105,22 +190,46 @@ export default function WanderingDharmaWheel({
     const samples = samplesRef.current
     if (samples.length < 2) return
 
-    ctx.lineWidth = 2
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter'
 
-    for (let i = 1; i < samples.length; i++) {
-      const prev = samples[i - 1]
-      const curr = samples[i]
-      const age = now - curr.time
-      const alpha = Math.max(0, 1 - age / fadeWindow)
+    for (let i = 0; i < samples.length; i += 1) {
+      const sample = samples[i]
+      const age = now - sample.time
+      const t = age / fadeWindow
+      // exponential decay: bright near wheel, ghost further back
+      const alpha = Math.exp(-3.5 * t)
+      if (alpha < 0.01) continue
+
+      // size: 2.8px fresh → 0.6px old
+      const radius = 0.6 + (1 - t) * 2.2
+
+      // subtle scatter using deterministic pseudo-random from index
+      const scatter = 1.2
+      const ox = Math.sin(i * 127.1) * scatter
+      const oy = Math.cos(i * 311.7) * scatter
+
+      // occasional brighter star (every ~8 samples)
+      const isStar = (i % 8 === 0)
+      const twinkle = isStar
+        ? 0.8 + 0.2 * Math.sin(sample.time * 6 + i * 0.9)
+        : 0.6 + 0.4 * Math.sin(sample.time * 9 + i * 0.31)
+
+      if (isStar) {
+        ctx.shadowBlur = 6
+        ctx.shadowColor = 'rgba(253, 224, 71, 0.6)'
+      } else {
+        ctx.shadowBlur = 0
+      }
+
       ctx.beginPath()
-      ctx.moveTo(prev.x, prev.y)
-      ctx.lineTo(curr.x, curr.y)
-      ctx.strokeStyle = `rgba(248, 196, 113, ${alpha})`
-      ctx.stroke()
+      ctx.arc(sample.x + ox, sample.y + oy, isStar ? radius * 1.8 : radius, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(253, 224, 71, ${alpha * 0.75 * twinkle})`
+      ctx.fill()
     }
-  }, [clampedX, clampedY])
+
+    ctx.restore()
+  }, [awakened, clampedX, clampedY])
 
   useEffect(() => {
     const canvas = traceCanvasRef.current
@@ -131,61 +240,71 @@ export default function WanderingDharmaWheel({
     samplesRef.current = []
   }, [profile.strategy.name, disabled])
 
-  // Respect reduced motion preference
+  // ── Reduced motion ────────────────────────────────────────────────────────────
   const prefersReducedMotion = typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // ── Position transition ───────────────────────────────────────────────────────
+  // Hero mode: no animation needed (fixed position).
+  // Awakening: slow spring so the wheel gracefully drifts from center.
+  // Settled wandering: fast linear (original behaviour).
+  const positionTransition = !awakened
+    ? { duration: 0 }
+    : isTransitioning
+      ? { type: 'spring', stiffness: 25, damping: 15 }
+      : { type: 'tween', ease: 'linear', duration: 0.1 }
+
+  if (!mounted) return null
 
   return (
     <>
       <canvas
         ref={traceCanvasRef}
         className="fixed top-0 left-0 pointer-events-none select-none"
-        style={{ zIndex: 0 }}
+        style={{ zIndex: 15, opacity: 0.92 }}
       />
       <motion.div
         id="dharma-wheel"
         data-vaithya-role="wheel"
         className="fixed pointer-events-none select-none"
         style={{
-          left: clampedX - wheelSize / 2,
-          top: clampedY - wheelSize / 2,
-          zIndex: 1,
+          left: clampedX - renderSize / 2,
+          top: clampedY - renderSize / 2,
+          zIndex: 16,
           opacity: prefersReducedMotion ? 0.1 : wheelOpacity
         }}
         animate={{
-          left: clampedX - wheelSize / 2,
-          top: clampedY - wheelSize / 2
+          left: clampedX - renderSize / 2,
+          top: clampedY - renderSize / 2,
         }}
-        transition={{
-          type: "tween",
-          ease: "linear",
-          duration: 0.1
-        }}
+        transition={positionTransition}
       >
-        <DharmaWheel
-          size={wheelSize}
-          className={`transition-opacity duration-500 ${disabled ? 'opacity-20' : ''}`}
-        />
+        {/* Float wrapper — only active in hero mode */}
+        <motion.div
+          animate={!awakened ? { y: [0, -10, 0] } : { y: 0 }}
+          transition={
+            !awakened
+              ? { duration: 4, repeat: Infinity, ease: 'easeInOut' }
+              : { duration: 0.6, ease: 'easeOut' }
+          }
+        >
+          <DharmaWheel
+            size={renderSize}
+            className={`transition-opacity duration-500 ${disabled ? 'opacity-20' : ''}`}
+          />
+        </motion.div>
 
-        {/* Optional: Very subtle trail effect */}
+        {/* Subtle ambient glow */}
         <motion.div
           className="absolute inset-0 rounded-full"
           style={{
-          background: `radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%)`,
-          filter: 'blur(2px)'
-        }}
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.1, 0.05, 0.1]
-        }}
-        transition={{
-          duration: 4,
-          repeat: Infinity,
-        ease: "easeInOut"
-      }}
-      />
-
-    </motion.div>
+            background: 'radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%)',
+            filter: 'blur(2px)'
+          }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.05, 0.1] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      </motion.div>
     </>
   )
 }

@@ -2,6 +2,7 @@ import contentData from '@/data/content.json'
 import writingData from '@/data/writing.json'
 
 export type LensId = 'lw-math' | 'engineer' | 'embodied' | 'buddhist'
+export type OrientationCategory = 'being' | 'doing' | 'becoming'
 
 // Content types
 export interface SiteContent {
@@ -69,6 +70,14 @@ export interface SiteContent {
         parameters: Record<string, unknown>
       }>
       lensProfiles: Record<LensId, {
+        strategy?: string
+        parameters?: Record<string, unknown>
+      }>
+      defaultUnoriented?: {
+        strategy?: string
+        parameters?: Record<string, unknown>
+      }
+      orientationProfiles?: Record<OrientationCategory, {
         strategy?: string
         parameters?: Record<string, unknown>
       }>
@@ -141,15 +150,26 @@ export interface WheelMotionProfile {
   }
 }
 
-export function getWheelMotionProfile(lensId: LensId | null): WheelMotionProfile {
+export function getWheelMotionProfile(
+  lensId: LensId | null,
+  orientationCategory?: OrientationCategory | null
+): WheelMotionProfile {
   const wheel = content.physics.dharmaWheel
   const lensProfile = lensId ? wheel.lensProfiles?.[lensId] : undefined
-  const strategyName = lensProfile?.strategy ?? wheel.defaultStrategy
+  const defaultUnoriented = !orientationCategory ? wheel.defaultUnoriented : undefined
+  const orientationProfile = orientationCategory ? wheel.orientationProfiles?.[orientationCategory] : undefined
+  const strategyName = orientationProfile?.strategy
+    ?? defaultUnoriented?.strategy
+    ?? lensProfile?.strategy
+    ?? wheel.defaultStrategy
   const strategyConfig = wheel.strategies[strategyName] ?? wheel.strategies[wheel.defaultStrategy]
+  const strategyOverridden = Boolean(orientationProfile?.strategy || defaultUnoriented?.strategy)
 
   const parameters = {
     ...(strategyConfig?.parameters ?? {}),
-    ...(lensProfile?.parameters ?? {})
+    ...(defaultUnoriented?.parameters ?? {}),
+    ...(strategyOverridden ? {} : (lensProfile?.parameters ?? {})),
+    ...(orientationProfile?.parameters ?? {})
   }
 
   return {

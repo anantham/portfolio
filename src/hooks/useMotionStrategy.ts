@@ -29,6 +29,8 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
   const frameRef = useRef<number | null>(null)
   const lastTimestampRef = useRef<number | null>(null)
   const mouseRef = useRef<Position | null>(mousePosition ?? null)
+  // Track live position so new runners can start from current location
+  const livePositionRef = useRef<Position>({ x: 0, y: 0 })
 
   useEffect(() => {
     mouseRef.current = mousePosition ?? null
@@ -42,7 +44,13 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
       return
     }
 
-    const runner = factory(config, { seed })
+    // Seed new runner from current live position so there's no teleport on config change
+    const currentPos = livePositionRef.current
+    const seededConfig = (currentPos.x !== 0 || currentPos.y !== 0)
+      ? { ...config as Record<string, unknown>, initialX: currentPos.x, initialY: currentPos.y }
+      : config
+
+    const runner = factory(seededConfig, { seed })
     runnerRef.current = runner
     timeRef.current = 0
     lastTimestampRef.current = null
@@ -58,6 +66,7 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
     runner.reset(startEnv)
 
     const result = runner.step({ ...startEnv, deltaTime: 0 })
+    livePositionRef.current = result.position
     setPosition(result.position)
     setVelocity(result.velocity)
 
@@ -98,6 +107,7 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
       }
 
       const result = runnerRef.current.step(env)
+      livePositionRef.current = result.position
       setPosition(result.position)
       setVelocity(result.velocity)
 
