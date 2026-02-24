@@ -191,41 +191,58 @@ export default function WanderingDharmaWheel({
     if (samples.length < 2) return
 
     ctx.save()
-    ctx.globalCompositeOperation = 'lighter'
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
 
-    for (let i = 0; i < samples.length; i += 1) {
-      const sample = samples[i]
-      const age = now - sample.time
-      const t = age / fadeWindow
-      // exponential decay: bright near wheel, ghost further back
+    // Split sample history into bands (oldest → newest). Each band is one
+    // smooth quadratic-bezier path drawn in two passes: a wide soft glow and
+    // a narrow sharp core. Width and alpha taper from fresh (near wheel) to old.
+    const numBands = Math.max(1, Math.min(24, Math.floor(samples.length / 4)))
+
+    for (let band = 0; band < numBands; band++) {
+      const startIdx = Math.floor(band * samples.length / numBands)
+      const endIdx = Math.min(samples.length - 1, Math.floor((band + 1) * samples.length / numBands))
+      if (endIdx <= startIdx) continue
+
+      const midSample = samples[Math.floor((startIdx + endIdx) / 2)]
+      const age = now - midSample.time
+      const t = Math.min(1, age / fadeWindow)
       const alpha = Math.exp(-3.5 * t)
       if (alpha < 0.01) continue
 
-      // size: 2.8px fresh → 0.6px old
-      const radius = 0.6 + (1 - t) * 2.2
+      const coreWidth = 0.35 + (1 - t) * 2.1
 
-      // subtle scatter using deterministic pseudo-random from index
-      const scatter = 1.2
-      const ox = Math.sin(i * 127.1) * scatter
-      const oy = Math.cos(i * 311.7) * scatter
-
-      // occasional brighter star (every ~8 samples)
-      const isStar = (i % 8 === 0)
-      const twinkle = isStar
-        ? 0.8 + 0.2 * Math.sin(sample.time * 6 + i * 0.9)
-        : 0.6 + 0.4 * Math.sin(sample.time * 9 + i * 0.31)
-
-      if (isStar) {
-        ctx.shadowBlur = 6
-        ctx.shadowColor = 'rgba(253, 224, 71, 0.6)'
+      // Build smooth path through the band using midpoint quadratic bezier.
+      ctx.beginPath()
+      const p0 = samples[startIdx]
+      const p1 = samples[startIdx + 1] ?? p0
+      if (endIdx - startIdx === 1) {
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(p1.x, p1.y)
       } else {
-        ctx.shadowBlur = 0
+        ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2)
+        for (let i = startIdx + 1; i < endIdx; i++) {
+          const si = samples[i]
+          const sn = samples[i + 1]
+          ctx.quadraticCurveTo(si.x, si.y, (si.x + sn.x) / 2, (si.y + sn.y) / 2)
+        }
+        ctx.lineTo(samples[endIdx].x, samples[endIdx].y)
       }
 
-      ctx.beginPath()
-      ctx.arc(sample.x + ox, sample.y + oy, isStar ? radius * 1.8 : radius, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(253, 224, 71, ${alpha * 0.75 * twinkle})`
-      ctx.fill()
+      // Glow pass — wide, additive, soft
+      ctx.globalCompositeOperation = 'lighter'
+      ctx.shadowBlur = coreWidth * 5
+      ctx.shadowColor = `rgba(253, 224, 71, ${alpha * 0.4})`
+      ctx.strokeStyle = `rgba(253, 224, 71, ${alpha * 0.18})`
+      ctx.lineWidth = coreWidth * 3.5
+      ctx.stroke()
+
+      // Core pass — narrow, crisp
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.shadowBlur = 0
+      ctx.strokeStyle = `rgba(253, 224, 71, ${alpha * 0.82})`
+      ctx.lineWidth = coreWidth
+      ctx.stroke()
     }
 
     ctx.restore()

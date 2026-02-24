@@ -4,7 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Pause, Play, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import journeyEvents from '@/data/journeyEvents.json'
 import GlobeClient from '@/components/journey/GlobeClient'
@@ -36,6 +36,7 @@ const baseJourneyEvents = journeyEvents as JourneyEvent[]
 const wheelSensitivity = 0.0006
 const autoPlaySpeed = 0.006
 const trailWindow = 4
+const AUTOPLAY_START_EVENT = 'hong-kong-apr-2023'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
@@ -101,14 +102,22 @@ export default function JourneyExperience() {
   const containerRef = useRef<HTMLDivElement>(null)
   const globeRef = useRef<any>(null)
   const touchYRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
   const modeRef = useRef<'autoplay' | 'manual'>('autoplay')
   const hasSeededFromQueryRef = useRef(false)
+  const progressRef = useRef(0)
+  const windowRadiusRef = useRef(0.45)
+  const activeEventRef = useRef<JourneyEvent | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressRepeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [mode, setMode] = useState<'autoplay' | 'manual'>('autoplay')
   const [progress, setProgress] = useState(0)
   const [worldFeatures, setWorldFeatures] = useState<any[]>([])
   const [viewport, setViewport] = useState({ width: 1200, height: 800 })
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+  const [smoothRadius, setSmoothRadius] = useState(0.45)
+  const [isDwellCardDismissed, setIsDwellCardDismissed] = useState(false)
 
   const isMobile = viewport.width < 900
 
@@ -130,6 +139,54 @@ export default function JourneyExperience() {
       medianGap: getMedianGap(markers),
     }
   }, [timeline])
+
+  // View window for the timeline ribbon: centered on progress, width driven by smoothRadius.
+  const viewWindow = useMemo(() => {
+    const r = smoothRadius
+    const start = clamp(progress - r, 0, Math.max(0, 1 - 2 * r))
+    const end = start + 2 * r
+    return { start, end }
+  }, [progress, smoothRadius])
+
+  // Group adjacent year labels that would visually overlap, showing a compact "minYear–maxYear" range instead.
+  const labelGroups = useMemo(() => {
+    const ribbonWidth = Math.min(viewport.width * 0.96, 980) - (isMobile ? 32 : 48)
+    const minCenterGap = 42 // px between label centers before merging
+    const span = viewWindow.end - viewWindow.start
+    if (span <= 0) return []
+
+    const candidates = timeline.events
+      .map((event) => {
+        const marker = getEventProgress(timeline, event.id) ?? 0
+        const isActive = event.id === activeEvent?.id
+        const inWindow = isActive || (marker >= viewWindow.start - 0.002 && marker <= viewWindow.end + 0.002)
+        if (!inWindow) return null
+        const displayLeft = clamp((marker - viewWindow.start) / span, 0, 1)
+        return { event, displayLeft, year: getEventYear(event), isActive }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => a.displayLeft - b.displayLeft)
+
+    type LabelGroup = { events: typeof candidates; centerLeft: number }
+    const groups: LabelGroup[] = []
+
+    for (const item of candidates) {
+      const last = groups[groups.length - 1]
+      const lastContainsActive = last?.events.some((e) => e.isActive)
+      const itemPx = item.displayLeft * ribbonWidth
+      const lastCenterPx = (last?.centerLeft ?? -Infinity) * ribbonWidth
+
+      if (!last || item.isActive || lastContainsActive || itemPx - lastCenterPx >= minCenterGap) {
+        groups.push({ events: [item], centerLeft: item.displayLeft })
+      } else {
+        last.events.push(item)
+        const positions = last.events.map((e) => e.displayLeft)
+        last.centerLeft = (Math.min(...positions) + Math.max(...positions)) / 2
+      }
+    }
+
+    return groups
+  }, [timeline, activeEvent?.id, viewWindow, viewport.width, isMobile])
 
   const transitions = useMemo(() => {
     return timeline.events.slice(1).map((toEvent, index) => {
@@ -155,10 +212,17 @@ export default function JourneyExperience() {
     })
   }, [timeline.events])
 
-  const arcsData = useMemo(() => {
-    if (!journeyState) return [] as ArcDatum[]
+  // Extract primitive fields so arcsData only recomputes on actual segment transitions,
+  // not on every animation frame. This prevents the beam dash-animation from resetting 60×/sec.
+  const jHasState = journeyState !== null
+  const jTraveling = journeyState?.traveling ?? false
+  const jCompletedTransitions = journeyState?.completedTransitions ?? -1
+  const jActiveTransitionIndex = journeyState?.activeTransitionIndex ?? null
 
-    const completedEnd = journeyState.completedTransitions
+  const arcsData = useMemo(() => {
+    if (!jHasState) return [] as ArcDatum[]
+
+    const completedEnd = jCompletedTransitions
     const completedStart = Math.max(0, completedEnd - (trailWindow - 1))
 
     const completed = transitions
@@ -184,12 +248,10 @@ export default function JourneyExperience() {
       })
 
     const activeTransition =
-      journeyState.activeTransitionIndex !== null
-        ? transitions[journeyState.activeTransitionIndex]
-        : null
+      jActiveTransitionIndex !== null ? transitions[jActiveTransitionIndex] : null
 
     const activeArc: ArcDatum[] =
-      journeyState.traveling && activeTransition
+      jTraveling && activeTransition
         ? [
             {
               id: `beam-${activeTransition.id}`,
@@ -208,7 +270,8 @@ export default function JourneyExperience() {
         : []
 
     return [...completed, ...activeArc]
-  }, [journeyState, transitions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jHasState, jTraveling, jCompletedTransitions, jActiveTransitionIndex, transitions])
 
   const pointsData = useMemo(() => {
     return timeline.events.map((event) => {
@@ -233,40 +296,68 @@ export default function JourneyExperience() {
     return timeline.events.find((event) => event.id === hoveredEventId) ?? null
   }, [hoveredEventId, timeline.events])
 
+  const loopStartProgress = useMemo(
+    () => getEventProgress(timeline, AUTOPLAY_START_EVENT) ?? 0,
+    [timeline],
+  )
+
   const cameraTarget = useMemo(() => {
     if (!journeyState) return null
 
-    const dwellAltitude = journeyState.activeEvent.era === 'lineage' ? 1.22 : 1.08
+    // Compute geographic spread of the ±4 surrounding events to determine dwell zoom.
+    // Tight cluster (same city/state) → zoom in; intercontinental spread → keep wide.
+    const idx = journeyState.activeEventIndex
+    const windowEvents = timeline.events.slice(Math.max(0, idx - 4), Math.min(timeline.events.length, idx + 5))
+    const lats = windowEvents.map((e) => e.lat)
+    const lngs = windowEvents.map((e) => e.lng)
+    const latSpread = windowEvents.length > 1 ? Math.max(...lats) - Math.min(...lats) : 180
+    const rawLngSpread = windowEvents.length > 1 ? Math.max(...lngs) - Math.min(...lngs) : 360
+    const lngSpread = Math.min(rawLngSpread, 360 - rawLngSpread)
+    const geoSpread = Math.max(latSpread, lngSpread)
+    const dwellAltitude =
+      geoSpread < 1 ? 0.35 :
+      geoSpread < 4 ? 0.52 :
+      geoSpread < 20 ? 0.80 :
+      journeyState.activeEvent.era === 'lineage' ? 1.22 : 1.08
 
     if (!journeyState.traveling) {
       return {
         lat: journeyState.activeEvent.lat,
         lng: journeyState.activeEvent.lng,
         altitude: dwellAltitude,
-        duration: mode === 'manual' ? 0 : 260,
+        duration: 300,
       }
     }
 
+    // Scale peak cruise altitude by geographic distance — short hops don't zoom far out.
+    const latDiff = Math.abs(journeyState.toEvent.lat - journeyState.fromEvent.lat)
+    const lngRaw = Math.abs(journeyState.toEvent.lng - journeyState.fromEvent.lng)
+    const lngDiff = Math.min(lngRaw, 360 - lngRaw)
+    const geoDist = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff)
+    const peakBoost = geoDist < 2 ? 0.10 : geoDist < 8 ? 0.40 : geoDist < 20 ? 0.65 : 0.74
+
     const travelProgress = smoothStep(clamp(journeyState.travelProgress, 0, 1))
-    const cruiseAltitude = 1.34 + 0.74 * Math.sin(Math.PI * travelProgress)
+    const cruiseAltitude = dwellAltitude + peakBoost * Math.sin(Math.PI * travelProgress)
+    const cruiseBase = dwellAltitude + peakBoost * 0.25
 
     let altitude = cruiseAltitude
 
     if (travelProgress < 0.16) {
       const phase = travelProgress / 0.16
-      altitude = lerp(dwellAltitude, 1.34, phase)
+      altitude = lerp(dwellAltitude, cruiseBase, phase)
     } else if (travelProgress > 0.84) {
       const phase = (travelProgress - 0.84) / 0.16
-      altitude = lerp(1.34, dwellAltitude, phase)
+      altitude = lerp(cruiseBase, dwellAltitude, phase)
     }
 
     return {
       lat: journeyState.lat,
       lng: journeyState.lng,
-      altitude: clamp(altitude, 1.05, 2.12),
-      duration: mode === 'manual' ? 0 : 120,
+      altitude: clamp(altitude, 0.30, 2.15),
+      // Always smooth so the zoom arc plays out even during manual scrubbing.
+      duration: 200,
     }
-  }, [journeyState, mode])
+  }, [journeyState, timeline.events])
 
   const jumpToEvent = useCallback(
     (eventId: string) => {
@@ -290,22 +381,77 @@ export default function JourneyExperience() {
       setProgress((current) => {
         const localGap = getLocalGap(markerProfile.markers, current, markerProfile.medianGap)
         const gapRatio = localGap / Math.max(epsilonGap, markerProfile.medianGap)
-        const sensitivityGain = clamp(Math.pow(gapRatio, 0.85), 0.16, 2.8)
+        const sensitivityGain = clamp(Math.pow(gapRatio, 0.5), 0.05, 2.8)
+
+        // During travel, require much more scroll so the beam moves slowly.
+        const state = getJourneyState(timeline, current)
+        const travelMul = state?.traveling ? 0.12 : 1.0
 
         const normalizedDelta = clamp(delta, -180, 180)
-        const rawStep = normalizedDelta * wheelSensitivity * sensitivityGain
-        const dynamicCap = clamp(0.004 + sensitivityGain * 0.012, 0.0025, 0.035)
+        const rawStep = normalizedDelta * wheelSensitivity * sensitivityGain * travelMul
+        const dynamicCap = clamp(0.002 + sensitivityGain * 0.01, 0.001, 0.03) * travelMul
         const boundedStep = clamp(rawStep, -dynamicCap, dynamicCap)
 
         return clamp(current + boundedStep, 0, 1)
       })
     },
-    [markerProfile],
+    [markerProfile, timeline],
   )
 
   useEffect(() => {
     modeRef.current = mode
   }, [mode])
+
+  useEffect(() => {
+    progressRef.current = progress
+  }, [progress])
+
+  useEffect(() => {
+    activeEventRef.current = activeEvent ?? null
+  }, [activeEvent])
+
+  useEffect(() => {
+    setIsDwellCardDismissed(false)
+  }, [activeEvent?.id])
+
+  const navigateRelative = useCallback(
+    (offset: 1 | -1) => {
+      const current = activeEventRef.current
+      if (!current) return
+      const idx = timeline.events.findIndex((e) => e.id === current.id)
+      const target = timeline.events[idx + offset]
+      if (target) jumpToEvent(target.id)
+    },
+    [timeline.events, jumpToEvent],
+  )
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target !== document.body) return
+      if (event.key === 'ArrowRight') navigateRelative(1)
+      else if (event.key === 'ArrowLeft') navigateRelative(-1)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [navigateRelative])
+
+  // Smoothly animate the timeline view-window radius toward the target density.
+  // Runs at 60 fps; only calls setSmoothRadius when the value meaningfully changes.
+  useEffect(() => {
+    let rafId: number
+    const tick = () => {
+      const localGap = getLocalGap(markerProfile.markers, progressRef.current, markerProfile.medianGap)
+      const target = clamp(localGap * 8, 0.06, 0.45)
+      const next = windowRadiusRef.current + (target - windowRadiusRef.current) * 0.08
+      if (Math.abs(next - windowRadiusRef.current) > 0.0001) {
+        windowRadiusRef.current = next
+        setSmoothRadius(next)
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [markerProfile])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -334,35 +480,74 @@ export default function JourneyExperience() {
     const node = containerRef.current
     if (!node) return
 
+    const cancelLongPress = () => {
+      if (longPressTimerRef.current !== null) {
+        clearTimeout(longPressTimerRef.current)
+        longPressTimerRef.current = null
+      }
+      if (longPressRepeatRef.current !== null) {
+        clearInterval(longPressRepeatRef.current)
+        longPressRepeatRef.current = null
+      }
+    }
+
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
+      event.stopPropagation()
       scrubByDelta(event.deltaY)
     }
 
     const onTouchStart = (event: TouchEvent) => {
-      touchYRef.current = event.touches[0]?.clientY ?? null
+      const touch = event.touches[0]
+      touchYRef.current = touch?.clientY ?? null
+      touchStartYRef.current = touch?.clientY ?? null
+
+      // Long-press zone detection: left 28% = prev, right 28% = next.
+      // Only applies on mobile; center zone is reserved for vertical scrub.
+      if (!isMobile) return
+      const x = touch?.clientX ?? 0
+      const sw = window.innerWidth
+      const direction: 1 | -1 | null = x < sw * 0.28 ? -1 : x > sw * 0.72 ? 1 : null
+      if (direction === null) return
+
+      longPressTimerRef.current = setTimeout(() => {
+        navigateRelative(direction)
+        longPressRepeatRef.current = setInterval(() => navigateRelative(direction), 550)
+      }, 380)
     }
 
     const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY
+      // Cancel long press if the finger moves vertically before the timer fires.
+      if (touchStartYRef.current !== null && currentY !== undefined &&
+          Math.abs(currentY - touchStartYRef.current) > 10) {
+        cancelLongPress()
+      }
       if (touchYRef.current === null) return
-      const currentY = event.touches[0]?.clientY ?? touchYRef.current
-      const delta = touchYRef.current - currentY
-      touchYRef.current = currentY
-
+      const y = currentY ?? touchYRef.current
+      const delta = touchYRef.current - y
+      touchYRef.current = y
       event.preventDefault()
       scrubByDelta(delta * 1.3)
     }
 
-    node.addEventListener('wheel', onWheel, { passive: false })
+    const onTouchEnd = () => cancelLongPress()
+
+    node.addEventListener('wheel', onWheel, { capture: true, passive: false })
     node.addEventListener('touchstart', onTouchStart, { passive: true })
     node.addEventListener('touchmove', onTouchMove, { passive: false })
+    node.addEventListener('touchend', onTouchEnd, { passive: true })
+    node.addEventListener('touchcancel', onTouchEnd, { passive: true })
 
     return () => {
-      node.removeEventListener('wheel', onWheel)
+      node.removeEventListener('wheel', onWheel, { capture: true })
       node.removeEventListener('touchstart', onTouchStart)
       node.removeEventListener('touchmove', onTouchMove)
+      node.removeEventListener('touchend', onTouchEnd)
+      node.removeEventListener('touchcancel', onTouchEnd)
+      cancelLongPress()
     }
-  }, [scrubByDelta])
+  }, [scrubByDelta, isMobile, navigateRelative])
 
   useEffect(() => {
     let cancelled = false
@@ -396,7 +581,7 @@ export default function JourneyExperience() {
 
       setProgress((current) => {
         const next = current + elapsed * autoPlaySpeed
-        return next > 1 ? 0 : next
+        return next > 1 ? loopStartProgress : next
       })
 
       frame = window.requestAnimationFrame(tick)
@@ -405,7 +590,7 @@ export default function JourneyExperience() {
     frame = window.requestAnimationFrame(tick)
 
     return () => window.cancelAnimationFrame(frame)
-  }, [mode])
+  }, [mode, loopStartProgress])
 
   useEffect(() => {
     if (!cameraTarget || !globeRef.current) return
@@ -441,10 +626,18 @@ export default function JourneyExperience() {
   }, [])
 
   useEffect(() => {
+    if (!globeRef.current) return
+    const controls = globeRef.current.controls()
+    if (!controls) return
+    controls.enableRotate = mode === 'manual' && !isMobile
+  }, [mode, isMobile])
+
+  useEffect(() => {
     if (hasSeededFromQueryRef.current) return
 
     const eventFromQuery = searchParams.get('event')
     if (!eventFromQuery) {
+      setProgress(loopStartProgress)
       hasSeededFromQueryRef.current = true
       return
     }
@@ -457,7 +650,7 @@ export default function JourneyExperience() {
 
     setProgress(targetProgress)
     hasSeededFromQueryRef.current = true
-  }, [searchParams, timeline])
+  }, [searchParams, timeline, loopStartProgress])
 
   useEffect(() => {
     if (!activeEvent?.id) return
@@ -534,6 +727,7 @@ export default function JourneyExperience() {
             controls.autoRotate = false
             controls.enablePan = false
             controls.enableZoom = false
+            controls.enableRotate = modeRef.current === 'manual' && !isMobile
 
             if (cameraTarget) {
               globeRef.current.pointOfView(
@@ -551,27 +745,29 @@ export default function JourneyExperience() {
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(148,163,184,0.16),transparent_42%)]" />
 
+      {isMobile && (
+        <>
+          <div className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-10 select-none text-4xl font-light text-white/20">‹</div>
+          <div className="pointer-events-none absolute right-2 top-1/2 z-10 -translate-y-10 select-none text-4xl font-light text-white/20">›</div>
+        </>
+      )}
+
       <div className="absolute left-4 top-4 z-20 flex items-center gap-2 md:left-8 md:top-8">
         <Link
           href="/"
-          className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/60 px-3 py-2 text-xs tracking-[0.12em] text-slate-200 backdrop-blur"
+          aria-label="Home"
+          className="pointer-events-auto inline-flex items-center justify-center rounded-full border border-white/20 bg-black/60 p-2 text-slate-200 backdrop-blur"
         >
-          <ArrowLeft size={14} />
-          Home
+          <ArrowLeft size={16} />
         </Link>
 
         <button
           type="button"
-          onClick={() => {
-            if (mode === 'autoplay') {
-              setMode('manual')
-            } else {
-              setMode('autoplay')
-            }
-          }}
-          className="pointer-events-auto rounded-full border border-white/20 bg-black/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-200 backdrop-blur"
+          aria-label={mode === 'autoplay' ? 'Pause' : 'Play'}
+          onClick={() => setMode(mode === 'autoplay' ? 'manual' : 'autoplay')}
+          className="pointer-events-auto inline-flex items-center justify-center rounded-full border border-white/20 bg-black/60 p-2 text-slate-200 backdrop-blur"
         >
-          {mode === 'autoplay' ? 'Autoplay' : 'Manual'}
+          {mode === 'autoplay' ? <Pause size={16} /> : <Play size={16} />}
         </button>
 
         <span className="rounded-full border border-white/10 bg-black/55 px-3 py-2 text-xs text-slate-300">
@@ -579,45 +775,73 @@ export default function JourneyExperience() {
         </span>
       </div>
 
-      {hoverEvent ? (
-        <div className="absolute right-4 top-20 z-20 w-[min(88vw,300px)] rounded-2xl border border-white/10 bg-black/68 p-4 backdrop-blur md:right-8 md:top-8">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">{formatEventDate(hoverEvent)}</p>
-          <h2 className="mt-2 text-base font-medium text-white">{hoverEvent.title}</h2>
-          <p className="text-xs text-slate-300">
-            {hoverEvent.locationName}, {hoverEvent.country}
-          </p>
-          <p className="mt-2 text-sm text-slate-200">{hoverEvent.summary}</p>
-          {hoverEvent.media?.image ? (
-            <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
-              <Image
-                src={hoverEvent.media.image}
-                alt={hoverEvent.media.alt || hoverEvent.title}
-                width={600}
-                height={340}
-                className="h-28 w-full object-cover"
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {(() => {
+        const isDwelling = !journeyState?.traveling
+        const displayCard = hoverEvent ?? (isDwelling && !isDwellCardDismissed ? activeEvent : null)
+        const isDwellMode = displayCard !== null && displayCard === activeEvent && !hoverEvent
+        if (!displayCard) return null
+        return (
+          <div className="absolute right-4 top-20 z-20 w-[min(88vw,300px)] rounded-2xl border border-white/10 bg-black/68 p-4 backdrop-blur md:right-8 md:top-8">
+            {isDwellMode && (
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setIsDwellCardDismissed(true)}
+                className="absolute right-3 top-3 rounded-full p-1 text-slate-400 transition-colors hover:text-white"
+              >
+                <X size={13} />
+              </button>
+            )}
+            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">{formatEventDate(displayCard)}</p>
+            <h2 className="mt-2 text-base font-medium text-white">{displayCard.title}</h2>
+            <p className="text-xs text-slate-300">
+              {displayCard.locationName}, {displayCard.country}
+            </p>
+            <p className="mt-2 text-sm text-slate-200">{displayCard.summary}</p>
+            {displayCard.media?.image ? (
+              <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
+                <Image
+                  src={displayCard.media.image}
+                  alt={displayCard.media.alt || displayCard.title}
+                  width={600}
+                  height={340}
+                  className="h-28 w-full object-cover"
+                />
+              </div>
+            ) : null}
+          </div>
+        )
+      })()}
 
       <div className="absolute bottom-6 left-1/2 z-20 w-[min(96vw,980px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/66 px-4 py-4 backdrop-blur md:bottom-8 md:px-6">
         <div className="relative h-1.5 rounded-full bg-slate-800/80">
           <motion.div
             className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-sky-300 via-indigo-300 to-emerald-300"
-            style={{ width: `${progress * 100}%` }}
+            style={{
+              width: `${clamp((progress - viewWindow.start) / (viewWindow.end - viewWindow.start), 0, 1) * 100}%`,
+            }}
           />
 
           {timeline.events.map((event) => {
             const marker = getEventProgress(timeline, event.id) ?? 0
             const active = event.id === activeEvent?.id
+            const span = viewWindow.end - viewWindow.start
+            const displayLeft = clamp((marker - viewWindow.start) / span, 0, 1)
+            const inWindow =
+              active ||
+              (marker >= viewWindow.start - 0.002 && marker <= viewWindow.end + 0.002)
 
             return (
               <button
                 key={event.id}
                 type="button"
                 className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${marker * 100}%` }}
+                style={{
+                  left: `${displayLeft * 100}%`,
+                  opacity: inWindow ? 1 : 0,
+                  pointerEvents: inWindow ? 'auto' : 'none',
+                  transition: 'opacity 200ms',
+                }}
                 onMouseEnter={() => setHoveredEventId(event.id)}
                 onMouseLeave={() => setHoveredEventId(null)}
                 onClick={() => jumpToEvent(event.id)}
@@ -634,22 +858,32 @@ export default function JourneyExperience() {
           })}
         </div>
 
-        <div className="mt-3 flex items-center gap-4 overflow-x-auto pb-1 text-[11px] uppercase tracking-[0.12em] text-slate-300">
-          {timeline.events.map((event) => {
-            const year = getEventYear(event)
+        <div className="relative mt-3 h-4">
+          {labelGroups.map((group) => {
+            const isCoarse = group.events.length > 1
+            const isActive = group.events.some((e) => e.isActive)
+            const minYear = Math.min(...group.events.map((e) => e.year))
+            const maxYear = Math.max(...group.events.map((e) => e.year))
+            const label = isCoarse ? `${minYear}–${maxYear}` : String(minYear)
+            const firstEvent = group.events[0].event
 
             return (
               <button
-                key={`year-${event.id}`}
+                key={`label-group-${firstEvent.id}`}
                 type="button"
-                onMouseEnter={() => setHoveredEventId(event.id)}
-                onMouseLeave={() => setHoveredEventId(null)}
-                onClick={() => jumpToEvent(event.id)}
-                className={`whitespace-nowrap transition ${
-                  event.id === activeEvent?.id ? 'text-sky-200' : 'text-slate-400 hover:text-slate-200'
+                className={`absolute top-0 -translate-x-1/2 whitespace-nowrap text-[11px] uppercase tracking-[0.12em] transition-[color] duration-200 ${
+                  isActive
+                    ? 'text-sky-200'
+                    : isCoarse
+                      ? 'text-slate-600 hover:text-slate-400'
+                      : 'text-slate-400 hover:text-slate-200'
                 }`}
+                style={{ left: `${group.centerLeft * 100}%` }}
+                onMouseEnter={() => setHoveredEventId(firstEvent.id)}
+                onMouseLeave={() => setHoveredEventId(null)}
+                onClick={() => jumpToEvent(firstEvent.id)}
               >
-                {year}
+                {label}
               </button>
             )
           })}

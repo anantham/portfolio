@@ -1,17 +1,19 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-import { forwardRef } from 'react'
-
-const GlobeImpl = dynamic(() => import('react-globe.gl'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full w-full bg-black/80 animate-pulse rounded-2xl border border-white/10" />
-  ),
-}) as any
+import { forwardRef, useEffect, useState } from 'react'
 
 const GlobeClient = forwardRef<any, Record<string, unknown>>((props, ref) => {
-  return <GlobeImpl {...props} ref={ref as any} />
+  const [Globe, setGlobe] = useState<any>(null)
+
+  useEffect(() => {
+    import('react-globe.gl').then((mod) => setGlobe(() => mod.default))
+  }, [])
+
+  if (!Globe) {
+    return <div className="h-full w-full bg-black" />
+  }
+
+  return <Globe {...props} ref={ref} />
 })
 
 GlobeClient.displayName = 'GlobeClient'

@@ -116,12 +116,16 @@ export const buildJourneyTimeline = (events: JourneyEvent[]): JourneyTimeline =>
     const travelDays = clamp(requestedTravel || Math.round(gapDays * 0.2), 1, Math.max(1, gapDays - 1))
     const dwellDays = Math.max(3, gapDays - travelDays)
 
-    const weight = dwellDays + travelDays
+    // Travel gets a large minimum weight so it always takes many scrolls to traverse.
+    // Dwell is capped so it passes quickly even for long historical gaps.
+    const travelWeight = Math.max(travelDays * 2, 40)
+    const effectiveDwell = Math.min(dwellDays, 18)
+    const weight = effectiveDwell + travelWeight
 
     return {
       from,
       to,
-      dwellRatio: dwellDays / weight,
+      dwellRatio: effectiveDwell / weight,
       weight,
     }
   })
