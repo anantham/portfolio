@@ -29,14 +29,22 @@ interface ArcDatum {
   stroke: number
   dashLength: number
   dashGap: number
+  dashInitialGap: number
   dashAnimateTime: number
 }
 
 const baseJourneyEvents = journeyEvents as JourneyEvent[]
 const wheelSensitivity = 0.0006
 const autoPlaySpeed = 0.006
-const trailWindow = 4
+const trailWindow = 2
 const AUTOPLAY_START_EVENT = 'hong-kong-apr-2023'
+const IDLE_AUTOPLAY_MS = 10_000
+
+// Stable module-level constants — defined once, never recreated.
+// Passing these as Globe props prevents the globe from re-diffing on every frame.
+const GLOBE_MATERIAL = { color: '#030712', emissive: '#020617', emissiveIntensity: 0.16, shininess: 0.3 }
+const hexPolygonColorFn = () => 'rgba(148, 163, 184, 0.44)'
+const ringColorFn = () => (value: number) => `rgba(125, 211, 252, ${Math.max(0, 1 - value)})`
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
@@ -57,6 +65,8 @@ const hexToRgba = (hex: string, alpha: number) => {
 }
 
 const getEventYear = (event: JourneyEvent) => new Date(`${event.startDate}T00:00:00Z`).getUTCFullYear()
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const getEventMonthAbbr = (event: JourneyEvent) => MONTH_ABBR[new Date(`${event.startDate}T00:00:00Z`).getUTCMonth()]
 
 const getMedianGap = (markers: number[]) => {
   if (markers.length < 2) return 0.08
@@ -110,8 +120,9 @@ export default function JourneyExperience() {
   const activeEventRef = useRef<JourneyEvent | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressRepeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const cameraTargetRef = useRef<typeof cameraTarget>(null)
 
-  const [mode, setMode] = useState<'autoplay' | 'manual'>('autoplay')
+  const [mode, setMode] = useState<'autoplay' | 'manual'>('manual')
   const [progress, setProgress] = useState(0)
   const [worldFeatures, setWorldFeatures] = useState<any[]>([])
   const [viewport, setViewport] = useState({ width: 1200, height: 800 })
@@ -148,12 +159,12 @@ export default function JourneyExperience() {
     return { start, end }
   }, [progress, smoothRadius])
 
-  // Group adjacent year labels that would visually overlap, showing a compact "minYear–maxYear" range instead.
-  const labelGroups = useMemo(() => {
+  // Group adjacent labels that would visually overlap.
+  // When all visible events are within ≤2 years, show month-level labels instead of years.
+  const { labelGroups, labelYearSpan } = useMemo(() => {
     const ribbonWidth = Math.min(viewport.width * 0.96, 980) - (isMobile ? 32 : 48)
-    const minCenterGap = 42 // px between label centers before merging
     const span = viewWindow.end - viewWindow.start
-    if (span <= 0) return []
+    if (span <= 0) return { labelGroups: [], labelYearSpan: 99 }
 
     const candidates = timeline.events
       .map((event) => {
@@ -162,10 +173,20 @@ export default function JourneyExperience() {
         const inWindow = isActive || (marker >= viewWindow.start - 0.002 && marker <= viewWindow.end + 0.002)
         if (!inWindow) return null
         const displayLeft = clamp((marker - viewWindow.start) / span, 0, 1)
-        return { event, displayLeft, year: getEventYear(event), isActive }
+        return { event, displayLeft, year: getEventYear(event), month: getEventMonthAbbr(event), isActive }
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => a.displayLeft - b.displayLeft)
+
+    const yearSpan = candidates.length > 0
+      ? Math.max(...candidates.map(c => c.year)) - Math.min(...candidates.map(c => c.year))
+      : 99
+
+    const MAX_LABELS = 5
+    // Adaptive gap: wide enough to naturally produce ≤ MAX_LABELS groups.
+    // ribbonWidth / (MAX_LABELS - 1) spaces MAX_LABELS labels evenly across the full ribbon.
+    const naturalGap = yearSpan <= 1 ? 36 : 42
+    const minCenterGap = Math.max(naturalGap, ribbonWidth / (MAX_LABELS - 1))
 
     type LabelGroup = { events: typeof candidates; centerLeft: number }
     const groups: LabelGroup[] = []
@@ -185,7 +206,21 @@ export default function JourneyExperience() {
       }
     }
 
-    return groups
+    // Hard cap: keep active group + evenly sampled non-active groups up to MAX_LABELS.
+    let finalGroups = groups
+    if (groups.length > MAX_LABELS) {
+      const activeGroup = groups.find(g => g.events.some(e => e.isActive))
+      const nonActive = groups.filter(g => !g.events.some(e => e.isActive))
+      const slots = MAX_LABELS - (activeGroup ? 1 : 0)
+      const sampled = slots <= 0 ? [] : Array.from(
+        { length: Math.min(slots, nonActive.length) },
+        (_, i) => nonActive[Math.round(i * (nonActive.length - 1) / Math.max(1, Math.min(slots, nonActive.length) - 1))]
+      )
+      finalGroups = (activeGroup ? [...sampled, activeGroup] : sampled)
+        .sort((a, b) => a.centerLeft - b.centerLeft)
+    }
+
+    return { labelGroups: finalGroups, labelYearSpan: yearSpan }
   }, [timeline, activeEvent?.id, viewWindow, viewport.width, isMobile])
 
   const transitions = useMemo(() => {
@@ -212,26 +247,25 @@ export default function JourneyExperience() {
     })
   }, [timeline.events])
 
-  // Extract primitive fields so arcsData only recomputes on actual segment transitions,
-  // not on every animation frame. This prevents the beam dash-animation from resetting 60×/sec.
+  // Primitive deps — completed trail only recomputes on segment boundary, not every frame.
   const jHasState = journeyState !== null
   const jTraveling = journeyState?.traveling ?? false
   const jCompletedTransitions = journeyState?.completedTransitions ?? -1
   const jActiveTransitionIndex = journeyState?.activeTransitionIndex ?? null
+  const jTravelProgress = journeyState?.travelProgress ?? 0
 
-  const arcsData = useMemo(() => {
+  // Stable: only changes when a new segment completes. No per-frame recomputation.
+  const completedArcsData = useMemo(() => {
     if (!jHasState) return [] as ArcDatum[]
-
     const completedEnd = jCompletedTransitions
     const completedStart = Math.max(0, completedEnd - (trailWindow - 1))
-
-    const completed = transitions
+    return transitions
       .filter((_, index) => index >= completedStart && index <= completedEnd)
       .map((transition, index, list) => {
         const age = list.length - 1 - index
-        const alpha = clamp(0.55 - age * 0.12, 0.14, 0.55)
-        const stroke = clamp(0.64 - age * 0.11, 0.24, 0.64)
-
+        // age=0 → most recent trail (bright), age=1 → ghost
+        const alpha = age === 0 ? 0.58 : 0.16
+        const stroke = age === 0 ? 0.68 : 0.26
         return {
           id: `trail-${transition.id}`,
           startLat: transition.fromEvent.lat,
@@ -243,35 +277,57 @@ export default function JourneyExperience() {
           stroke,
           dashLength: 1,
           dashGap: 0,
+          dashInitialGap: 0,
           dashAnimateTime: 0,
         }
       })
+  }, [jHasState, jCompletedTransitions, transitions])
 
-    const activeTransition =
-      jActiveTransitionIndex !== null ? transitions[jActiveTransitionIndex] : null
+  // Per-frame during travel: trace arc grows from source → destination as travelProgress → 1.
+  // No looping dash — dashAnimateTime is 0 throughout.
+  const activeArcData = useMemo(() => {
+    if (!jTraveling || jActiveTransitionIndex === null) return [] as ArcDatum[]
+    const activeTransition = transitions[jActiveTransitionIndex]
+    if (!activeTransition) return [] as ArcDatum[]
+    const tp = clamp(jTravelProgress, 0, 1)
+    return [
+      // Trace body: grows from 0 → full arc length
+      {
+        id: `trace-${activeTransition.id}`,
+        startLat: activeTransition.fromEvent.lat,
+        startLng: activeTransition.fromEvent.lng,
+        endLat: activeTransition.toEvent.lat,
+        endLng: activeTransition.toEvent.lng,
+        color: hexToRgba(activeTransition.color, 0.88),
+        altitude: activeTransition.altitude,
+        stroke: 0.9,
+        dashLength: Math.max(0.003, tp),
+        dashGap: Math.max(0, 1 - tp),
+        dashInitialGap: 0,
+        dashAnimateTime: 0,
+      },
+      // Leading head: bright dot riding the tip of the trace
+      {
+        id: `head-${activeTransition.id}`,
+        startLat: activeTransition.fromEvent.lat,
+        startLng: activeTransition.fromEvent.lng,
+        endLat: activeTransition.toEvent.lat,
+        endLng: activeTransition.toEvent.lng,
+        color: '#f8fafc',
+        altitude: activeTransition.altitude + 0.012,
+        stroke: 1.4,
+        dashLength: 0.025,
+        dashGap: 0.975,
+        dashInitialGap: Math.max(0, tp - 0.013),
+        dashAnimateTime: 0,
+      },
+    ]
+  }, [jTraveling, jActiveTransitionIndex, jTravelProgress, transitions])
 
-    const activeArc: ArcDatum[] =
-      jTraveling && activeTransition
-        ? [
-            {
-              id: `beam-${activeTransition.id}`,
-              startLat: activeTransition.fromEvent.lat,
-              startLng: activeTransition.fromEvent.lng,
-              endLat: activeTransition.toEvent.lat,
-              endLng: activeTransition.toEvent.lng,
-              color: '#f8fafc',
-              altitude: activeTransition.altitude + 0.06,
-              stroke: 0.84,
-              dashLength: 0.22,
-              dashGap: 0.78,
-              dashAnimateTime: 580,
-            },
-          ]
-        : []
-
-    return [...completed, ...activeArc]
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jHasState, jTraveling, jCompletedTransitions, jActiveTransitionIndex, transitions])
+  const arcsData = useMemo(
+    () => activeArcData.length === 0 ? completedArcsData : [...completedArcsData, ...activeArcData],
+    [completedArcsData, activeArcData],
+  )
 
   const pointsData = useMemo(() => {
     return timeline.events.map((event) => {
@@ -286,10 +342,12 @@ export default function JourneyExperience() {
     })
   }, [timeline.events, journeyState?.activeEvent.id])
 
+  // Use primitive deps — jTraveling and activeEvent.id are stable between frames;
+  // journeyState itself is recreated every frame so must not be a direct dep here.
   const ringsData = useMemo(() => {
-    if (!journeyState || journeyState.traveling) return []
-    return [journeyState.activeEvent]
-  }, [journeyState])
+    if (jTraveling || !activeEvent) return []
+    return [activeEvent]
+  }, [jTraveling, activeEvent])
 
   const hoverEvent = useMemo(() => {
     if (!hoveredEventId) return null
@@ -370,6 +428,35 @@ export default function JourneyExperience() {
     [timeline],
   )
 
+  const onPointHover = useCallback(
+    (point: object | null) => {
+      if (isMobile) return
+      setHoveredEventId(point ? (point as JourneyEvent).id : null)
+    },
+    [isMobile],
+  )
+
+  const onPointClick = useCallback(
+    (point: object) => {
+      setMode('manual')
+      jumpToEvent((point as JourneyEvent).id)
+    },
+    [jumpToEvent],
+  )
+
+  const onGlobeReady = useCallback(() => {
+    if (!globeRef.current) return
+    const controls = globeRef.current.controls()
+    controls.autoRotate = false
+    controls.enablePan = false
+    controls.enableZoom = false
+    controls.enableRotate = modeRef.current === 'manual' && !isMobile
+    const target = cameraTargetRef.current
+    if (target) {
+      globeRef.current.pointOfView({ lat: target.lat, lng: target.lng, altitude: target.altitude }, 0)
+    }
+  }, [isMobile])
+
   const scrubByDelta = useCallback(
     (delta: number) => {
       if (Math.abs(delta) < 0.2) return
@@ -401,6 +488,34 @@ export default function JourneyExperience() {
   useEffect(() => {
     modeRef.current = mode
   }, [mode])
+
+  // Idle-to-autoplay: if nothing happens for IDLE_AUTOPLAY_MS, start playing.
+  // Any activity (mousemove, scroll, keydown, touch) resets the countdown.
+  // Switching to manual (via scrub/click) is handled by existing handlers;
+  // this effect only ever starts autoplay — it never stops it.
+  useEffect(() => {
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+    const arm = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => setMode('autoplay'), IDLE_AUTOPLAY_MS)
+    }
+
+    window.addEventListener('mousemove', arm, { passive: true })
+    window.addEventListener('touchstart', arm, { passive: true })
+    window.addEventListener('wheel', arm, { passive: true })
+    window.addEventListener('keydown', arm)
+
+    arm() // start the initial countdown immediately
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      window.removeEventListener('mousemove', arm)
+      window.removeEventListener('touchstart', arm)
+      window.removeEventListener('wheel', arm)
+      window.removeEventListener('keydown', arm)
+    }
+  }, [])
 
   useEffect(() => {
     progressRef.current = progress
@@ -593,6 +708,7 @@ export default function JourneyExperience() {
   }, [mode, loopStartProgress])
 
   useEffect(() => {
+    cameraTargetRef.current = cameraTarget
     if (!cameraTarget || !globeRef.current) return
 
     globeRef.current.pointOfView(
@@ -670,12 +786,7 @@ export default function JourneyExperience() {
           width={viewport.width}
           height={viewport.height}
           backgroundColor="rgba(0,0,0,1)"
-          globeMaterial={{
-            color: '#030712',
-            emissive: '#020617',
-            emissiveIntensity: 0.16,
-            shininess: 0.3,
-          }}
+          globeMaterial={GLOBE_MATERIAL}
           showAtmosphere={false}
           showGraticules={false}
           enablePointerInteraction={!isMobile}
@@ -683,15 +794,16 @@ export default function JourneyExperience() {
           hexPolygonResolution={3}
           hexPolygonUseDots
           hexPolygonMargin={0.5}
-          hexPolygonColor={() => 'rgba(148, 163, 184, 0.44)'}
+          hexPolygonColor={hexPolygonColorFn}
           arcsData={arcsData}
           arcColor="color"
           arcAltitude="altitude"
           arcStroke="stroke"
           arcDashLength="dashLength"
           arcDashGap="dashGap"
+          arcDashInitialGap="dashInitialGap"
           arcDashAnimateTime="dashAnimateTime"
-          arcTransitionDuration={260}
+          arcTransitionDuration={0}
           pointsData={pointsData}
           pointLat="lat"
           pointLng="lng"
@@ -699,47 +811,16 @@ export default function JourneyExperience() {
           pointAltitude="pointAltitude"
           pointRadius="pointRadius"
           pointResolution={12}
-          onPointHover={(point: object | null) => {
-            if (isMobile) return
-            if (!point) {
-              setHoveredEventId(null)
-              return
-            }
-
-            const data = point as JourneyEvent
-            setHoveredEventId(data.id)
-          }}
-          onPointClick={(point: object) => {
-            const data = point as JourneyEvent
-            setMode('manual')
-            jumpToEvent(data.id)
-          }}
+          onPointHover={onPointHover}
+          onPointClick={onPointClick}
           ringsData={ringsData}
           ringLat="lat"
           ringLng="lng"
-          ringColor={() => (value: number) => `rgba(125, 211, 252, ${Math.max(0, 1 - value)})`}
+          ringColor={ringColorFn}
           ringMaxRadius={3.4}
           ringPropagationSpeed={1.3}
           ringRepeatPeriod={1200}
-          onGlobeReady={() => {
-            if (!globeRef.current) return
-            const controls = globeRef.current.controls()
-            controls.autoRotate = false
-            controls.enablePan = false
-            controls.enableZoom = false
-            controls.enableRotate = modeRef.current === 'manual' && !isMobile
-
-            if (cameraTarget) {
-              globeRef.current.pointOfView(
-                {
-                  lat: cameraTarget.lat,
-                  lng: cameraTarget.lng,
-                  altitude: cameraTarget.altitude,
-                },
-                0,
-              )
-            }
-          }}
+          onGlobeReady={onGlobeReady}
         />
       </div>
 
@@ -864,7 +945,26 @@ export default function JourneyExperience() {
             const isActive = group.events.some((e) => e.isActive)
             const minYear = Math.min(...group.events.map((e) => e.year))
             const maxYear = Math.max(...group.events.map((e) => e.year))
-            const label = isCoarse ? `${minYear}–${maxYear}` : String(minYear)
+            const m0 = group.events[0].month
+            const mN = group.events[group.events.length - 1].month
+
+            let label: string
+            if (labelYearSpan === 0) {
+              // All visible events in same year — show month only
+              label = isCoarse && m0 !== mN ? `${m0}–${mN}` : m0
+            } else if (labelYearSpan <= 2) {
+              // Span ≤ 2 years — show month + short year
+              if (isCoarse) {
+                label = minYear === maxYear
+                  ? `${m0}–${mN} '${String(minYear).slice(-2)}`
+                  : `${m0} '${String(minYear).slice(-2)}–${mN} '${String(maxYear).slice(-2)}`
+              } else {
+                label = `${m0} '${String(minYear).slice(-2)}`
+              }
+            } else {
+              label = isCoarse ? `${minYear}–${maxYear}` : String(minYear)
+            }
+
             const firstEvent = group.events[0].event
 
             return (

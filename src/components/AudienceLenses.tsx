@@ -115,7 +115,7 @@ function CyclingImage({ images, title, priority }: { images: string[]; title: st
             src={src}
             alt={title}
             fill
-            className="object-contain"
+            className="object-cover"
             sizes="(min-width: 1280px) 30vw, (min-width: 768px) 45vw, 100vw"
             priority={priority}
           />
@@ -153,8 +153,9 @@ const OrientationCard = forwardRef<HTMLDivElement, {
       >
       <div className={`relative bg-gradient-to-br ${config.gradient}`}>
         <CyclingImage images={card.images} title={card.title} priority={priority} />
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/55 to-transparent pointer-events-none" />
         <div className="absolute top-3 left-3">
-          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-zen-950/70 backdrop-blur text-xs font-medium ${config.accent} ring-1 ring-zen-800/60`}>
+          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40 backdrop-blur text-xs font-medium ${config.accent} ring-1 ring-white/10`}>
             <Icon size={12} />
             {config.label}
           </span>
