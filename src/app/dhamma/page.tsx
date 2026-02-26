@@ -72,6 +72,11 @@ export default function DhammaPage() {
           onDeactivatePanel={deactivatePanel}
         />
 
+        {/* Vimutti spokes overlay */}
+        {containerSize > 0 && (
+          <VimuttiSpokes revealed={vimuttiRevealed} containerSize={containerSize} />
+        )}
+
         {/* Connection threads overlay */}
         {containerSize > 0 && (
           <ConnectionThreads
