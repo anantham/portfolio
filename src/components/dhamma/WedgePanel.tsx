@@ -7,7 +7,7 @@
 /* ================================================================== */
 
 import { motion } from 'framer-motion'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { PathFactor, PILLARS } from '@/data/mandalaData'
 import { panelPlaceholder } from '@/lib/mandalaAssets'
@@ -49,6 +49,17 @@ export default function WedgePanel({
   breatheDelay,
 }: WedgePanelProps) {
   const pillar = PILLARS[factor.pillar]
+
+  // --- Reduced motion preference ---
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mql.matches)
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
 
   // Track image load errors so we can fall back to SVG placeholders
   const [restingError, setRestingError] = useState(false)
@@ -141,22 +152,30 @@ export default function WedgePanel({
         }}
         // Breathing animation when at rest; static opacity otherwise
         {...(isBreathing
-          ? {
-              animate: { opacity: breatheKeyframes },
-              transition: {
-                opacity: {
-                  duration: BREATHE_DURATION,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                  delay: breatheDelay,
+          ? prefersReducedMotion
+            ? {
+                // Reduced motion: use static midpoint opacity instead of breathing
+                animate: { opacity: breatheKeyframes[1] },
+                transition: {
+                  opacity: { duration: 0, ease: MANDALA_EASE },
                 },
-              },
-            }
+              }
+            : {
+                animate: { opacity: breatheKeyframes },
+                transition: {
+                  opacity: {
+                    duration: BREATHE_DURATION,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                    delay: breatheDelay,
+                  },
+                },
+              }
           : {
               animate: { opacity: restingOpacityValue },
               transition: {
                 opacity: {
-                  duration: CROSSFADE_DURATION,
+                  duration: prefersReducedMotion ? 0 : CROSSFADE_DURATION,
                   ease: MANDALA_EASE,
                 },
               },
@@ -173,7 +192,7 @@ export default function WedgePanel({
         animate={{ opacity: isActive ? 1 : 0 }}
         transition={{
           opacity: {
-            duration: CROSSFADE_DURATION,
+            duration: prefersReducedMotion ? 0 : CROSSFADE_DURATION,
             ease: MANDALA_EASE,
           },
         }}
@@ -193,7 +212,7 @@ export default function WedgePanel({
         animate={{ opacity: isActive ? 1 : 0 }}
         transition={{
           opacity: {
-            duration: CROSSFADE_DURATION,
+            duration: prefersReducedMotion ? 0 : CROSSFADE_DURATION,
             ease: MANDALA_EASE,
           },
         }}

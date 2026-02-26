@@ -4,9 +4,12 @@ import { useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import MandalaWheel from '@/components/dhamma/MandalaWheel'
+import VimuttiSpokes from '@/components/dhamma/VimuttiSpokes'
 import ConnectionThreads from '@/components/dhamma/ConnectionThreads'
 import MandalaA11y from '@/components/dhamma/MandalaA11y'
 import { useMandalaState } from '@/hooks/useMandalaState'
+import { usePreloadImages } from '@/hooks/usePreloadImages'
+import { PATH_FACTORS } from '@/data/mandalaData'
 
 export default function DhammaPage() {
   const {
@@ -19,6 +22,8 @@ export default function DhammaPage() {
     activateConnection,
     deactivateConnection,
   } = useMandalaState()
+
+  usePreloadImages(PATH_FACTORS.map(f => f.illuminatedImage))
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerSize, setContainerSize] = useState(0)

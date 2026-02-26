@@ -9,7 +9,7 @@
 /*   3. CENTER hub with resting/illuminated crossfade                  */
 /* ================================================================== */
 
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useMotionValue, useAnimationFrame } from 'framer-motion'
 
 import { PATH_FACTORS } from '@/data/mandalaData'
@@ -46,11 +46,23 @@ export default function MandalaWheel({
   onActivatePanel,
   onDeactivatePanel,
 }: MandalaWheelProps) {
+  // --- Reduced motion preference ---
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mql.matches)
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+
   // --- Continuous rotation via useAnimationFrame ---
   const rotation = useMotionValue(0)
   const startTimeRef = useRef<number | null>(null)
 
   useAnimationFrame((elapsed) => {
+    if (prefersReducedMotion) return
     if (startTimeRef.current === null) {
       startTimeRef.current = elapsed
     }
