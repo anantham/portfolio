@@ -9,7 +9,7 @@ import AtmosphereDebugPanel from '@/components/AtmosphereDebugPanel'
 import TinyVaithya from '@/components/TinyVaithya'
 import { siteConfig } from '@/lib/config'
 
-const immersivePrefixes = ['/journey']
+const immersivePrefixes = ['/journey', '/dhamma']
 
 export default function RouteChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
