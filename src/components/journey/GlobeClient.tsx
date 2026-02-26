@@ -1,19 +1,26 @@
 'use client'
 
-import { forwardRef, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { forwardRef, type ComponentType } from 'react'
 
-const GlobeClient = forwardRef<any, Record<string, unknown>>((props, ref) => {
-  const [Globe, setGlobe] = useState<any>(null)
+type GlobeProps = Record<string, unknown>
 
-  useEffect(() => {
-    import('react-globe.gl').then((mod) => setGlobe(() => mod.default))
-  }, [])
+const GlobeNoSSR = dynamic(
+  () =>
+    import('react-globe.gl').then((mod) => {
+      const Globe = mod.default as ComponentType<any>
+      const GlobeWithRef = forwardRef<any, GlobeProps>((props, ref) => <Globe {...props} ref={ref} />)
+      GlobeWithRef.displayName = 'GlobeWithRef'
+      return GlobeWithRef
+    }),
+  {
+    ssr: false,
+    loading: () => <div className="h-full w-full bg-black" />,
+  },
+)
 
-  if (!Globe) {
-    return <div className="h-full w-full bg-black" />
-  }
-
-  return <Globe {...props} ref={ref} />
+const GlobeClient = forwardRef<any, GlobeProps>((props, ref) => {
+  return <GlobeNoSSR {...props} ref={ref} />
 })
 
 GlobeClient.displayName = 'GlobeClient'

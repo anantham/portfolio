@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "rm -rf .next && next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "next lint",
-    "setup": "cp .env.example .env.local && echo 'Environment file created! Edit .env.local with your details, then run npm run dev'"
+    "setup": "cp .env.example .env.local && echo 'Environment file created! Edit .env.local with your details, then run npm run dev'",
+    "enrich:journey-media": "node scripts/enrich-journey-media.mjs --tag ticket-derived"
   },
   "dependencies": {
     "autoprefixer": "^10.4.21",

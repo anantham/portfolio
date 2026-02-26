@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // App directory is now stable in Next.js 14
+  // Dev-only hardening: avoid stale vendor chunk entries causing module/runtime mismatch.
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.cache = { type: 'memory' }
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig

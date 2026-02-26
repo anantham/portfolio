@@ -1,0 +1,102 @@
+[
+  {
+    "id": "dehradun-may-2024",
+    "title": "Dehradun Trip",
+    "locationName": "Dehradun",
+    "country": "India",
+    "wikipediaTitle": "Dehradun",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Dehradun",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Dehradun_view_from_maggi_point.jpg",
+    "fetchedAt": "2026-02-26T12:16:08.997Z"
+  },
+  {
+    "id": "tbilisi-jul-2024",
+    "title": "Tbilisi, Georgia",
+    "locationName": "Tbilisi",
+    "country": "Georgia",
+    "wikipediaTitle": "Tbilisi",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Tbilisi",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/4/45/View_of_Tbilisi_from_Tabori_Church_2023-10-08-2.jpg",
+    "fetchedAt": "2026-02-26T12:16:10.233Z"
+  },
+  {
+    "id": "bengaluru-sep-2024",
+    "title": "Bengaluru Base",
+    "locationName": "Bengaluru",
+    "country": "India",
+    "wikipediaTitle": "Bengaluru",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Bengaluru",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/c/cd/View_from_Visvesvaraya_Industrial_and_Technological_Museum_%282025%29_02.jpg",
+    "fetchedAt": "2026-02-26T12:16:11.147Z"
+  },
+  {
+    "id": "portland-apr-2025",
+    "title": "Portland, Oregon",
+    "locationName": "Portland",
+    "country": "United States",
+    "wikipediaTitle": "Portland, Oregon",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Portland%2C_Oregon",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Portland_Oregon_Aerial%2C_June_2025.jpg",
+    "fetchedAt": "2026-02-26T12:16:15.909Z"
+  },
+  {
+    "id": "hanoi-sep-2025",
+    "title": "Hanoi",
+    "locationName": "Hanoi",
+    "country": "Vietnam",
+    "wikipediaTitle": "Hanoi",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Hanoi",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/8/8e/Hanoi_skyline_with_Ba_Vi_Mountain.jpg",
+    "fetchedAt": "2026-02-26T12:16:17.078Z"
+  },
+  {
+    "id": "hyderabad-feb-2026",
+    "title": "Hyderabad",
+    "locationName": "Hyderabad",
+    "country": "India",
+    "wikipediaTitle": "Hyderabad",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Hyderabad",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/8/88/Downtown_hyderabad_drone.png",
+    "fetchedAt": "2026-02-26T12:16:17.719Z"
+  },
+  {
+    "id": "san-francisco-feb-2025",
+    "title": "San Francisco",
+    "locationName": "San Francisco",
+    "country": "United States",
+    "wikipediaTitle": "San Francisco",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/San_Francisco",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/f/f9/San_Francisco_Downtown_Aerial%2C_August_2025.jpg",
+    "fetchedAt": "2026-02-26T12:16:52.851Z"
+  },
+  {
+    "id": "burlington-feb-apr-2025",
+    "title": "Burlington, Vermont",
+    "locationName": "Burlington",
+    "country": "United States",
+    "wikipediaTitle": "Burlington, Vermont",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Burlington%2C_Vermont",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/6/65/View_of_the_Burlington_Marketplace_2017-10-01.jpg",
+    "fetchedAt": "2026-02-26T12:16:57.623Z"
+  },
+  {
+    "id": "burlington-apr-may-2025",
+    "title": "Burlington, Vermont",
+    "locationName": "Burlington",
+    "country": "United States",
+    "wikipediaTitle": "Burlington, Vermont",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/Burlington%2C_Vermont",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/6/65/View_of_the_Burlington_Marketplace_2017-10-01.jpg",
+    "fetchedAt": "2026-02-26T12:17:00.833Z"
+  },
+  {
+    "id": "delhi-feb-2026",
+    "title": "New Delhi",
+    "locationName": "New Delhi",
+    "country": "India",
+    "wikipediaTitle": "New Delhi",
+    "wikipediaPage": "https://en.wikipedia.org/wiki/New_Delhi",
+    "imageSource": "https://upload.wikimedia.org/wikipedia/commons/f/fe/Forecourt%2C_Rashtrapati_Bhavan_-_1.jpg",
+    "fetchedAt": "2026-02-26T12:18:30.000Z"
+  }
+]
