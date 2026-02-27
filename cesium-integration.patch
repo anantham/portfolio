@@ -1,0 +1,4348 @@
+From 874bebf29bd375531403d8afb277b1253a7b519e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Feb 2026 17:28:12 +0000
+Subject: [PATCH 1/3] feat(journey): integrate Cesium.js for 3D
+ globe-to-terrain transitions
+
+Major changes:
+- Install cesium and resium packages for 3D geospatial visualization
+- Configure webpack to copy Cesium static assets (Workers, Widgets, etc.)
+- Create route generation script that produces waypoints for ground travel
+  - Supports Mapbox Directions API (when token provided)
+  - Falls back to simple interpolation for development
+  - Generated 10 train routes with 20+ waypoints each
+- Add Cesium environment variables to .env.example
+- Create CesiumViewer and CesiumViewerClient components
+  - Dynamic import with no SSR (Cesium requires browser APIs)
+  - Support for flight arcs and ground routes
+  - Entity markers for journey events
+  - Terrain support when Cesium Ion token is available
+
+Documentation:
+- Add ROUTE_DATA_REQUIREMENTS.md explaining route data format
+- Document options for custom routes, waypoints, and effects
+- List all 10 train journeys that need ground visualization
+
+Next steps:
+- Port full journey state management logic to Cesium
+- Implement cinematic camera choreography for transitions
+- Add 3D models for train/car/hiker entities
+- Fetch real routes with Mapbox API
+---
+ .env.example                                  |    8 +
+ ROUTE_DATA_REQUIREMENTS.md                    |  258 ++++
+ next.config.js                                |   47 +-
+ package-lock.json                             | 1230 ++++++++++++++++-
+ package.json                                  |    8 +-
+ scripts/generate-journey-routes.mjs           |  242 ++++
+ src/components/journey/CesiumViewer.tsx       |   19 +
+ src/components/journey/CesiumViewerClient.tsx |  246 ++++
+ src/data/journeyRoutes.json                   | 1042 ++++++++++++++
+ 9 files changed, 3045 insertions(+), 55 deletions(-)
+ create mode 100644 ROUTE_DATA_REQUIREMENTS.md
+ create mode 100755 scripts/generate-journey-routes.mjs
+ create mode 100644 src/components/journey/CesiumViewer.tsx
+ create mode 100644 src/components/journey/CesiumViewerClient.tsx
+ create mode 100644 src/data/journeyRoutes.json
+
+diff --git a/.env.example b/.env.example
+index 8fc8a8f..1be3077 100644
+--- a/.env.example
++++ b/.env.example
+@@ -39,3 +39,11 @@ NEXT_PUBLIC_PLAUSIBLE_DOMAIN="yourdomain.com"
+ 
+ # Development
+ NODE_ENV="development"
++
++# Mapbox (for journey routes and terrain)
++MAPBOX_ACCESS_TOKEN="your_mapbox_token_here"
++NEXT_PUBLIC_MAPBOX_TOKEN="your_mapbox_token_here"
++
++# Cesium Ion (for 3D terrain - optional, has free tier)
++CESIUM_ION_TOKEN="your_cesium_ion_token_here"
++NEXT_PUBLIC_CESIUM_ION_TOKEN="your_cesium_ion_token_here"
+diff --git a/ROUTE_DATA_REQUIREMENTS.md b/ROUTE_DATA_REQUIREMENTS.md
+new file mode 100644
+index 0000000..da56038
+--- /dev/null
++++ b/ROUTE_DATA_REQUIREMENTS.md
+@@ -0,0 +1,258 @@
++# Route Data Requirements for Cesium Journey
++
++## Current State
++Your `journeyEvents.json` has:
++- ✅ **24 flights** (will stay as arcs)
++- ✅ **10 train journeys** (need ground routes)
++- ✅ **0 hikes** (type exists, can add later)
++- ✅ Start/end coordinates (`lat`, `lng`)
++- ✅ Transport mode (`transportFromPrevious`)
++
++## What We Need for Beautiful Ground Routes
++
++### Option A: **I'll Auto-Generate Routes** (For Now)
++I'll use **Mapbox Directions API** or **Google Maps Routes API** to automatically generate waypoints between your train segments. You can refine them later.
++
++**What I'll generate:**
++```json
++{
++  "id": "lawrence-ooty",
++  "routeWaypoints": [
++    { "lat": 10.7867, "lng": 76.6548 },  // Palakkad (start)
++    { "lat": 11.0234, "lng": 76.7123 },  // Auto waypoint 1
++    { "lat": 11.2456, "lng": 76.6890 },  // Auto waypoint 2
++    { "lat": 11.4102, "lng": 76.695 }    // Ooty (end)
++  ],
++  "routeDistance": 142.3,  // km
++  "routeElevationProfile": [
++    { "distance": 0, "elevation": 295 },
++    { "distance": 50, "elevation": 1200 },
++    { "distance": 100, "elevation": 2240 }
++  ]
++}
++```
++
++**This gives you:**
++- ✅ Smooth curved paths (not straight lines)
++- ✅ Elevation data for camera altitude
++- ✅ Realistic train routes following roads/rails
++
++---
++
++### Option B: **You Provide Custom Routes** (For Specific Journeys)
++For routes you want to be **exact** (like a specific scenic train line), provide GPX tracks or waypoint arrays.
++
++#### Format 1: GPX Track (Best for hiking/scenic routes)
++```xml
++<!-- Example: Nilgiri Mountain Railway -->
++<gpx>
++  <trk>
++    <name>Nilgiri Mountain Railway</name>
++    <trkseg>
++      <trkpt lat="11.4102" lon="76.695"><ele>2240</ele></trkpt>
++      <trkpt lat="11.3850" lon="76.710"><ele>1950</ele></trkpt>
++      <!-- ... more points -->
++    </trkseg>
++  </trk>
++</gpx>
++```
++
++#### Format 2: JSON Waypoints (Easiest)
++```json
++{
++  "id": "lawrence-ooty",
++  "customRoute": {
++    "waypoints": [
++      { "lat": 10.7867, "lng": 76.6548, "elevation": 295, "label": "Palakkad Junction" },
++      { "lat": 11.0102, "lng": 76.7020, "elevation": 450, "label": "Coimbatore" },
++      { "lat": 11.3501, "lng": 76.7337, "elevation": 1600, "label": "Coonoor" },
++      { "lat": 11.4102, "lng": 76.6950, "elevation": 2240, "label": "Ooty Station" }
++    ],
++    "routeType": "rail",  // "rail", "road", "trail"
++    "terrain": "mountain", // "mountain", "coastal", "plain", "urban"
++    "highlights": [
++      { "distance": 85.2, "label": "Entered Nilgiri Mountains", "camera": "wide" },
++      { "distance": 120.5, "label": "Wellington Tunnel", "camera": "close" }
++    ]
++  }
++}
++```
++
++---
++
++## Enhanced Data Fields (Optional but Awesome)
++
++Add these to any journey event for **cinematic control**:
++
++### Camera Hints
++```json
++{
++  "id": "your-event-id",
++  "cameraSettings": {
++    "dwellAltitude": 50000,      // meters (auto-calculated by default)
++    "travelAltitude": 500,        // how high to follow train (default: 500m)
++    "travelPitch": -60,           // camera angle (default: -45°)
++    "travelBearing": "auto",      // or specific heading in degrees
++    "transitionDuration": 3000,   // swoop animation time in ms
++    "followDistance": 800         // how far behind entity to place camera
++  }
++}
++```
++
++### 3D Model Overrides
++```json
++{
++  "id": "trans-siberian",
++  "entityModel": {
++    "type": "train",
++    "model": "/models/steam-locomotive.glb",  // custom 3D model
++    "scale": 1.5,
++    "rotationOffset": 90  // if model faces wrong direction
++  }
++}
++```
++
++### Visual Effects
++```json
++{
++  "id": "himalayan-trek",
++  "effects": {
++    "trail": {
++      "enabled": true,
++      "color": "#22c55e",
++      "width": 3,
++      "glowPower": 0.4,
++      "fadeTime": 2000  // ms for trail to fade
++    },
++    "particles": {
++      "type": "dust",  // "steam", "dust", "snow"
++      "density": 0.7
++    },
++    "atmosphere": {
++      "fog": 0.3,  // 0-1
++      "lighting": "golden-hour"  // "noon", "golden-hour", "dusk"
++    }
++  }
++}
++```
++
++### Points of Interest (POIs)
++```json
++{
++  "id": "golden-temple-visit",
++  "pois": [
++    {
++      "lat": 31.6200,
++      "lng": 74.8765,
++      "label": "Golden Temple",
++      "pauseFor": 2000,  // pause camera here for 2 seconds
++      "zoomTo": 200,     // zoom to 200m altitude
++      "description": "Sacred Sikh shrine"
++    }
++  ]
++}
++```
++
++---
++
++## Your 10 Train Journeys That Need Routes
++
++Here's what I found in your data:
++
++| From → To | Distance (est) | Route Type | Priority |
++|-----------|----------------|------------|----------|
++| Palakkad → Coimbatore | ~50 km | Regional | Medium |
++| Coimbatore → Palakkad | ~50 km | Regional | Medium |
++| Thrissur → Palakkad | ~80 km | Regional | Medium |
++| Palakkad → Ooty | ~140 km | **Mountain Railway** ⭐ | **HIGH** |
++| Ooty → Palakkad | ~140 km | **Mountain Railway** ⭐ | **HIGH** |
++| Palakkad → Sriperumbudur | ~350 km | Long distance | Low |
++| Sriperumbudur → Dehradun | ~2400 km | **Trans-India** ⭐ | **HIGH** |
++| Trivandrum → Bengaluru | ~650 km | Regional express | Medium |
++| Thiruvananthapuram → Hyderabad | ~1100 km | Long distance | Medium |
++| Hyderabad → Delhi | ~1600 km | Long distance | Medium |
++
++### Recommended Focus
++I'll auto-generate all 10, but you might want **custom routes** for:
++1. **Nilgiri Mountain Railway** (Palakkad → Ooty) - Iconic scenic route
++2. **Trans-India journey** (Sriperumbudur → Dehradun) - Epic 2400km across India
++3. Any route through **Himalayas** (if you add hiking segments)
++
++---
++
++## What I'll Do Next
++
++### Phase 1: Auto-Generation (I'll handle this)
++```bash
++# I'll create a script that:
++1. Reads your journeyEvents.json
++2. For each train/hike segment:
++   - Fetch route from Mapbox/Google
++   - Get elevation profile
++   - Generate 20-50 waypoints
++   - Calculate camera positions
++3. Output: journeyRoutes.json
++```
++
++### Phase 2: You Refine (Optional)
++```bash
++# You can then:
++- Replace auto-routes with GPX tracks
++- Add camera hints for dramatic moments
++- Specify custom 3D models
++- Add POIs and effects
++```
++
++---
++
++## Quick Decisions Needed
++
++**1. Routing API Choice:**
++- ☐ **Mapbox Directions API** (free tier: 100k requests/month, better terrain)
++- ☐ **Google Maps Directions API** ($5/1000 requests, more accurate roads)
++- ☐ **GraphHopper** (open source, self-hosted, free)
++
++**2. For the 2 high-priority scenic routes, do you want:**
++- ☐ I'll auto-generate now, you refine later
++- ☐ Wait - I'll provide GPX files first (delay by ~1 day)
++
++**3. 3D Models:**
++- ☐ Use simple icons (🚂 emoji-style, fast)
++- ☐ Download free GLB models from Sketchfab (better looking)
++- ☐ I'll provide custom models later
++
++**My recommendation:** Let me auto-generate everything with **Mapbox Directions API** (I already have access), use **simple icons for now**, and you can **upgrade specific routes** as we go.
++
++---
++
++## Data Format Output
++
++I'll generate this file:
++
++**`src/data/journeyRoutes.json`**
++```json
++{
++  "paternal-grandparents-meet": {
++    "from": { "lat": 10.7867, "lng": 76.6548, "name": "Palakkad" },
++    "to": { "lat": 11.0168, "lng": 76.9558, "name": "Coimbatore" },
++    "transportMode": "train",
++    "distance": 52.3,
++    "duration": 90,
++    "waypoints": [...],
++    "elevationProfile": [...],
++    "generatedBy": "mapbox-directions-api",
++    "generatedAt": "2026-02-27"
++  },
++  "lawrence-ooty": {
++    // ... etc
++  }
++}
++```
++
++---
++
++## Ready to Go?
++
++**Default plan:** I'll auto-generate all routes with Mapbox, start implementing Cesium today, and you can refine specific routes as we test.
++
++Sound good? 🚀
+diff --git a/next.config.js b/next.config.js
+index d15654b..b30d50a 100644
+--- a/next.config.js
++++ b/next.config.js
+@@ -1,10 +1,55 @@
++const CopyWebpackPlugin = require('copy-webpack-plugin');
++const path = require('path');
++
+ /** @type {import('next').NextConfig} */
+ const nextConfig = {
+   // Dev-only hardening: avoid stale vendor chunk entries causing module/runtime mismatch.
+-  webpack: (config, { dev }) => {
++  webpack: (config, { dev, isServer }) => {
+     if (dev) {
+       config.cache = { type: 'memory' }
+     }
++
++    // Cesium configuration for client-side only
++    if (!isServer) {
++      // Copy Cesium static assets to public directory
++      config.plugins.push(
++        new CopyWebpackPlugin({
++          patterns: [
++            {
++              from: path.join(__dirname, 'node_modules/cesium/Build/Cesium/Workers'),
++              to: path.join(__dirname, 'public/cesium/Workers')
++            },
++            {
++              from: path.join(__dirname, 'node_modules/cesium/Build/Cesium/ThirdParty'),
++              to: path.join(__dirname, 'public/cesium/ThirdParty')
++            },
++            {
++              from: path.join(__dirname, 'node_modules/cesium/Build/Cesium/Assets'),
++              to: path.join(__dirname, 'public/cesium/Assets')
++            },
++            {
++              from: path.join(__dirname, 'node_modules/cesium/Build/Cesium/Widgets'),
++              to: path.join(__dirname, 'public/cesium/Widgets')
++            }
++          ]
++        })
++      );
++
++      // Cesium module configuration
++      config.module = {
++        ...config.module,
++        unknownContextCritical: false,
++        unknownContextRegExp: /\/cesium\/cesium\/Source\/Core\/buildModuleUrl\.js/
++      };
++
++      // Define Cesium base URL
++      config.plugins.push(
++        new (require('webpack')).DefinePlugin({
++          CESIUM_BASE_URL: JSON.stringify('/cesium')
++        })
++      );
++    }
++
+     return config
+   },
+ }
+diff --git a/package-lock.json b/package-lock.json
+index 114b2d3..b0a6308 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -9,12 +9,14 @@
+       "version": "0.1.0",
+       "dependencies": {
+         "autoprefixer": "^10.4.21",
++        "cesium": "^1.138.0",
+         "framer-motion": "^11.3.28",
+         "lucide-react": "^0.436.0",
+         "next": "^14.2.32",
+         "react": "^18",
+         "react-dom": "^18",
+-        "react-globe.gl": "^2.37.0"
++        "react-globe.gl": "^2.37.0",
++        "resium": "^1.19.4"
+       },
+       "devDependencies": {
+         "@testing-library/jest-dom": "^6.9.1",
+@@ -22,6 +24,7 @@
+         "@types/node": "^20",
+         "@types/react": "^18",
+         "@types/react-dom": "^18",
++        "copy-webpack-plugin": "^13.0.1",
+         "eslint": "^8",
+         "eslint-config-next": "14.2.7",
+         "jsdom": "^28.1.0",
+@@ -122,6 +125,7 @@
+       "integrity": "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "dependencies": {
+         "@babel/helper-validator-identifier": "^7.28.5",
+         "js-tokens": "^4.0.0",
+@@ -137,6 +141,7 @@
+       "integrity": "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "engines": {
+         "node": ">=6.9.0"
+       }
+@@ -163,6 +168,57 @@
+         "specificity": "bin/cli.js"
+       }
+     },
++    "node_modules/@cesium/engine": {
++      "version": "22.3.0",
++      "resolved": "https://registry.npmjs.org/@cesium/engine/-/engine-22.3.0.tgz",
++      "integrity": "sha512-oDl+nWX/qfHYQ0lEdGxLqZoKEtTMghvJDzZKTycYfiIuDYDh8Kh0Oy45wr3mSJse3PuTj1e6hDmbw8vbycCOxw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@cesium/wasm-splats": "^0.1.0-alpha.2",
++        "@spz-loader/core": "0.3.0",
++        "@tweenjs/tween.js": "^25.0.0",
++        "@zip.js/zip.js": "^2.8.1",
++        "autolinker": "^4.0.0",
++        "bitmap-sdf": "^1.0.3",
++        "dompurify": "^3.3.0",
++        "draco3d": "^1.5.1",
++        "earcut": "^3.0.0",
++        "grapheme-splitter": "^1.0.4",
++        "jsep": "^1.3.8",
++        "kdbush": "^4.0.1",
++        "ktx-parse": "^1.0.0",
++        "lerc": "^2.0.0",
++        "mersenne-twister": "^1.1.0",
++        "meshoptimizer": "^1.0.1",
++        "pako": "^2.0.4",
++        "protobufjs": "^8.0.0",
++        "rbush": "^4.0.1",
++        "topojson-client": "^3.1.0",
++        "urijs": "^1.19.7"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      }
++    },
++    "node_modules/@cesium/wasm-splats": {
++      "version": "0.1.0-alpha.2",
++      "resolved": "https://registry.npmjs.org/@cesium/wasm-splats/-/wasm-splats-0.1.0-alpha.2.tgz",
++      "integrity": "sha512-t9pMkknv31hhIbLpMa8yPvmqfpvs5UkUjgqlQv9SeO8VerCXOYnyP8/486BDaFrztM0A7FMbRjsXtNeKvqQghA==",
++      "license": "Apache-2.0"
++    },
++    "node_modules/@cesium/widgets": {
++      "version": "14.3.0",
++      "resolved": "https://registry.npmjs.org/@cesium/widgets/-/widgets-14.3.0.tgz",
++      "integrity": "sha512-1bS+Nv/uXwP0/NV0o4XeUA5nLCWttjTmKwl+pHnbZXp0ZwDmClb0xVDruDyVtLrUuRhsk84JZ4rXI/IT7HXOvA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@cesium/engine": "^22.3.0",
++        "nosleep.js": "^0.12.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      }
++    },
+     "node_modules/@csstools/color-helpers": {
+       "version": "6.0.2",
+       "resolved": "https://registry.npmjs.org/@csstools/color-helpers/-/color-helpers-6.0.2.tgz",
+@@ -251,7 +307,6 @@
+         }
+       ],
+       "license": "MIT",
+-      "peer": true,
+       "engines": {
+         "node": ">=20.19.0"
+       },
+@@ -292,7 +347,6 @@
+         }
+       ],
+       "license": "MIT",
+-      "peer": true,
+       "engines": {
+         "node": ">=20.19.0"
+       }
+@@ -960,6 +1014,18 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/@jridgewell/source-map": {
++      "version": "0.3.11",
++      "resolved": "https://registry.npmjs.org/@jridgewell/source-map/-/source-map-0.3.11.tgz",
++      "integrity": "sha512-ZMp1V8ZFcPG5dIWnQLr3NSI1MiCU7UETdS/A0G8V/XWHvJv3ZsFqutJn1Y5RPmAPX6F3BiE397OqveU/9NCuIA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@jridgewell/gen-mapping": "^0.3.5",
++        "@jridgewell/trace-mapping": "^0.3.25"
++      }
++    },
+     "node_modules/@jridgewell/sourcemap-codec": {
+       "version": "1.5.5",
+       "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+@@ -1210,6 +1276,70 @@
+         "node": ">=14"
+       }
+     },
++    "node_modules/@protobufjs/aspromise": {
++      "version": "1.1.2",
++      "resolved": "https://registry.npmjs.org/@protobufjs/aspromise/-/aspromise-1.1.2.tgz",
++      "integrity": "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/base64": {
++      "version": "1.1.2",
++      "resolved": "https://registry.npmjs.org/@protobufjs/base64/-/base64-1.1.2.tgz",
++      "integrity": "sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/codegen": {
++      "version": "2.0.4",
++      "resolved": "https://registry.npmjs.org/@protobufjs/codegen/-/codegen-2.0.4.tgz",
++      "integrity": "sha512-YyFaikqM5sH0ziFZCN3xDC7zeGaB/d0IUb9CATugHWbd1FRFwWwt4ld4OYMPWu5a3Xe01mGAULCdqhMlPl29Jg==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/eventemitter": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@protobufjs/eventemitter/-/eventemitter-1.1.0.tgz",
++      "integrity": "sha512-j9ednRT81vYJ9OfVuXG6ERSTdEL1xVsNgqpkxMsbIabzSo3goCjDIveeGv5d03om39ML71RdmrGNjG5SReBP/Q==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/fetch": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@protobufjs/fetch/-/fetch-1.1.0.tgz",
++      "integrity": "sha512-lljVXpqXebpsijW71PZaCYeIcE5on1w5DlQy5WH6GLbFryLUrBD4932W/E2BSpfRJWseIL4v/KPgBFxDOIdKpQ==",
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "@protobufjs/aspromise": "^1.1.1",
++        "@protobufjs/inquire": "^1.1.0"
++      }
++    },
++    "node_modules/@protobufjs/float": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/@protobufjs/float/-/float-1.0.2.tgz",
++      "integrity": "sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/inquire": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@protobufjs/inquire/-/inquire-1.1.0.tgz",
++      "integrity": "sha512-kdSefcPdruJiFMVSbn801t4vFK7KB/5gd2fYvrxhuJYg8ILrmn9SKSX2tZdV6V+ksulWqS7aXjBcRXl3wHoD9Q==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/path": {
++      "version": "1.1.2",
++      "resolved": "https://registry.npmjs.org/@protobufjs/path/-/path-1.1.2.tgz",
++      "integrity": "sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/pool": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@protobufjs/pool/-/pool-1.1.0.tgz",
++      "integrity": "sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw==",
++      "license": "BSD-3-Clause"
++    },
++    "node_modules/@protobufjs/utf8": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@protobufjs/utf8/-/utf8-1.1.0.tgz",
++      "integrity": "sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==",
++      "license": "BSD-3-Clause"
++    },
+     "node_modules/@rollup/rollup-android-arm-eabi": {
+       "version": "4.59.0",
+       "resolved": "https://registry.npmjs.org/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.59.0.tgz",
+@@ -1574,6 +1704,16 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@spz-loader/core": {
++      "version": "0.3.0",
++      "resolved": "https://registry.npmjs.org/@spz-loader/core/-/core-0.3.0.tgz",
++      "integrity": "sha512-sbStwMHb/MIE29st7rRuMYWqhX1UmLSFzdpyGtUZUXLkFNIuYKblzjQdtiet8bau8sUf21uL1DQ451zuySGmcA==",
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=16",
++        "pnpm": ">=8"
++      }
++    },
+     "node_modules/@standard-schema/spec": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/@standard-schema/spec/-/spec-1.1.0.tgz",
+@@ -1603,6 +1743,7 @@
+       "integrity": "sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "dependencies": {
+         "@babel/code-frame": "^7.10.4",
+         "@babel/runtime": "^7.12.5",
+@@ -1623,6 +1764,7 @@
+       "integrity": "sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==",
+       "dev": true,
+       "license": "Apache-2.0",
++      "peer": true,
+       "dependencies": {
+         "dequal": "^2.0.3"
+       }
+@@ -1747,7 +1889,8 @@
+       "resolved": "https://registry.npmjs.org/@types/aria-query/-/aria-query-5.0.4.tgz",
+       "integrity": "sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==",
+       "dev": true,
+-      "license": "MIT"
++      "license": "MIT",
++      "peer": true
+     },
+     "node_modules/@types/chai": {
+       "version": "5.2.3",
+@@ -1767,6 +1910,30 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@types/eslint": {
++      "version": "9.6.1",
++      "resolved": "https://registry.npmjs.org/@types/eslint/-/eslint-9.6.1.tgz",
++      "integrity": "sha512-FXx2pKgId/WyYo2jXw63kk7/+TY7u7AziEJxJAnSFzHlqTAS3Ync6SvgYAN/k4/PQpnnVuzoMuVnByKK2qp0ag==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@types/estree": "*",
++        "@types/json-schema": "*"
++      }
++    },
++    "node_modules/@types/eslint-scope": {
++      "version": "3.7.7",
++      "resolved": "https://registry.npmjs.org/@types/eslint-scope/-/eslint-scope-3.7.7.tgz",
++      "integrity": "sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@types/eslint": "*",
++        "@types/estree": "*"
++      }
++    },
+     "node_modules/@types/estree": {
+       "version": "1.0.8",
+       "resolved": "https://registry.npmjs.org/@types/estree/-/estree-1.0.8.tgz",
+@@ -1780,6 +1947,13 @@
+       "integrity": "sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==",
+       "license": "MIT"
+     },
++    "node_modules/@types/json-schema": {
++      "version": "7.0.15",
++      "resolved": "https://registry.npmjs.org/@types/json-schema/-/json-schema-7.0.15.tgz",
++      "integrity": "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@types/json5": {
+       "version": "0.0.29",
+       "resolved": "https://registry.npmjs.org/@types/json5/-/json5-0.0.29.tgz",
+@@ -1791,9 +1965,7 @@
+       "version": "20.19.16",
+       "resolved": "https://registry.npmjs.org/@types/node/-/node-20.19.16.tgz",
+       "integrity": "sha512-VS6TTONVdgwJwtJr7U+ghEjpfmQdqehLLpg/iMYGOd1+ilaFjdBJwFuPggJ4EAYPDCzWfDUHoIxyVnu+tOWVuQ==",
+-      "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~6.21.0"
+       }
+@@ -1811,7 +1983,6 @@
+       "integrity": "sha512-0dLEBsA1kI3OezMBF8nSsb7Nk19ZnsyE1LLhB8r27KbgU5H4pvuqZLdtE+aUkJVoXgTVuA+iLIwmZ0TuK4tx6A==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@types/prop-types": "*",
+         "csstype": "^3.0.2"
+@@ -1823,11 +1994,17 @@
+       "integrity": "sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "peerDependencies": {
+         "@types/react": "^18.0.0"
+       }
+     },
++    "node_modules/@types/trusted-types": {
++      "version": "2.0.7",
++      "resolved": "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz",
++      "integrity": "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==",
++      "license": "MIT",
++      "optional": true
++    },
+     "node_modules/@typescript-eslint/parser": {
+       "version": "7.2.0",
+       "resolved": "https://registry.npmjs.org/@typescript-eslint/parser/-/parser-7.2.0.tgz",
+@@ -2349,6 +2526,209 @@
+         "url": "https://opencollective.com/vitest"
+       }
+     },
++    "node_modules/@webassemblyjs/ast": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/ast/-/ast-1.14.1.tgz",
++      "integrity": "sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/helper-numbers": "1.13.2",
++        "@webassemblyjs/helper-wasm-bytecode": "1.13.2"
++      }
++    },
++    "node_modules/@webassemblyjs/floating-point-hex-parser": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/floating-point-hex-parser/-/floating-point-hex-parser-1.13.2.tgz",
++      "integrity": "sha512-6oXyTOzbKxGH4steLbLNOu71Oj+C8Lg34n6CqRvqfS2O71BxY6ByfMDRhBytzknj9yGUPVJ1qIKhRlAwO1AovA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/@webassemblyjs/helper-api-error": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/helper-api-error/-/helper-api-error-1.13.2.tgz",
++      "integrity": "sha512-U56GMYxy4ZQCbDZd6JuvvNV/WFildOjsaWD3Tzzvmw/mas3cXzRJPMjP83JqEsgSbyrmaGjBfDtV7KDXV9UzFQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/@webassemblyjs/helper-buffer": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/helper-buffer/-/helper-buffer-1.14.1.tgz",
++      "integrity": "sha512-jyH7wtcHiKssDtFPRB+iQdxlDf96m0E39yb0k5uJVhFGleZFoNw1c4aeIcVUPPbXUVJ94wwnMOAqUHyzoEPVMA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/@webassemblyjs/helper-numbers": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/helper-numbers/-/helper-numbers-1.13.2.tgz",
++      "integrity": "sha512-FE8aCmS5Q6eQYcV3gI35O4J789wlQA+7JrqTTpJqn5emA4U2hvwJmvFRC0HODS+3Ye6WioDklgd6scJ3+PLnEA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/floating-point-hex-parser": "1.13.2",
++        "@webassemblyjs/helper-api-error": "1.13.2",
++        "@xtuc/long": "4.2.2"
++      }
++    },
++    "node_modules/@webassemblyjs/helper-wasm-bytecode": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/helper-wasm-bytecode/-/helper-wasm-bytecode-1.13.2.tgz",
++      "integrity": "sha512-3QbLKy93F0EAIXLh0ogEVR6rOubA9AoZ+WRYhNbFyuB70j3dRdwH9g+qXhLAO0kiYGlg3TxDV+I4rQTr/YNXkA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/@webassemblyjs/helper-wasm-section": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/helper-wasm-section/-/helper-wasm-section-1.14.1.tgz",
++      "integrity": "sha512-ds5mXEqTJ6oxRoqjhWDU83OgzAYjwsCV8Lo/N+oRsNDmx/ZDpqalmrtgOMkHwxsG0iI//3BwWAErYRHtgn0dZw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/ast": "1.14.1",
++        "@webassemblyjs/helper-buffer": "1.14.1",
++        "@webassemblyjs/helper-wasm-bytecode": "1.13.2",
++        "@webassemblyjs/wasm-gen": "1.14.1"
++      }
++    },
++    "node_modules/@webassemblyjs/ieee754": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/ieee754/-/ieee754-1.13.2.tgz",
++      "integrity": "sha512-4LtOzh58S/5lX4ITKxnAK2USuNEvpdVV9AlgGQb8rJDHaLeHciwG4zlGr0j/SNWlr7x3vO1lDEsuePvtcDNCkw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@xtuc/ieee754": "^1.2.0"
++      }
++    },
++    "node_modules/@webassemblyjs/leb128": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/leb128/-/leb128-1.13.2.tgz",
++      "integrity": "sha512-Lde1oNoIdzVzdkNEAWZ1dZ5orIbff80YPdHx20mrHwHrVNNTjNr8E3xz9BdpcGqRQbAEa+fkrCb+fRFTl/6sQw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "peer": true,
++      "dependencies": {
++        "@xtuc/long": "4.2.2"
++      }
++    },
++    "node_modules/@webassemblyjs/utf8": {
++      "version": "1.13.2",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/utf8/-/utf8-1.13.2.tgz",
++      "integrity": "sha512-3NQWGjKTASY1xV5m7Hr0iPeXD9+RDobLll3T9d2AO+g3my8xy5peVyjSag4I50mR1bBSN/Ct12lo+R9tJk0NZQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/@webassemblyjs/wasm-edit": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/wasm-edit/-/wasm-edit-1.14.1.tgz",
++      "integrity": "sha512-RNJUIQH/J8iA/1NzlE4N7KtyZNHi3w7at7hDjvRNm5rcUXa00z1vRz3glZoULfJ5mpvYhLybmVcwcjGrC1pRrQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/ast": "1.14.1",
++        "@webassemblyjs/helper-buffer": "1.14.1",
++        "@webassemblyjs/helper-wasm-bytecode": "1.13.2",
++        "@webassemblyjs/helper-wasm-section": "1.14.1",
++        "@webassemblyjs/wasm-gen": "1.14.1",
++        "@webassemblyjs/wasm-opt": "1.14.1",
++        "@webassemblyjs/wasm-parser": "1.14.1",
++        "@webassemblyjs/wast-printer": "1.14.1"
++      }
++    },
++    "node_modules/@webassemblyjs/wasm-gen": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/wasm-gen/-/wasm-gen-1.14.1.tgz",
++      "integrity": "sha512-AmomSIjP8ZbfGQhumkNvgC33AY7qtMCXnN6bL2u2Js4gVCg8fp735aEiMSBbDR7UQIj90n4wKAFUSEd0QN2Ukg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/ast": "1.14.1",
++        "@webassemblyjs/helper-wasm-bytecode": "1.13.2",
++        "@webassemblyjs/ieee754": "1.13.2",
++        "@webassemblyjs/leb128": "1.13.2",
++        "@webassemblyjs/utf8": "1.13.2"
++      }
++    },
++    "node_modules/@webassemblyjs/wasm-opt": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/wasm-opt/-/wasm-opt-1.14.1.tgz",
++      "integrity": "sha512-PTcKLUNvBqnY2U6E5bdOQcSM+oVP/PmrDY9NzowJjislEjwP/C4an2303MCVS2Mg9d3AJpIGdUFIQQWbPds0Sw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/ast": "1.14.1",
++        "@webassemblyjs/helper-buffer": "1.14.1",
++        "@webassemblyjs/wasm-gen": "1.14.1",
++        "@webassemblyjs/wasm-parser": "1.14.1"
++      }
++    },
++    "node_modules/@webassemblyjs/wasm-parser": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/wasm-parser/-/wasm-parser-1.14.1.tgz",
++      "integrity": "sha512-JLBl+KZ0R5qB7mCnud/yyX08jWFw5MsoalJ1pQ4EdFlgj9VdXKGuENGsiCIjegI1W7p91rUlcB/LB5yRJKNTcQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/ast": "1.14.1",
++        "@webassemblyjs/helper-api-error": "1.13.2",
++        "@webassemblyjs/helper-wasm-bytecode": "1.13.2",
++        "@webassemblyjs/ieee754": "1.13.2",
++        "@webassemblyjs/leb128": "1.13.2",
++        "@webassemblyjs/utf8": "1.13.2"
++      }
++    },
++    "node_modules/@webassemblyjs/wast-printer": {
++      "version": "1.14.1",
++      "resolved": "https://registry.npmjs.org/@webassemblyjs/wast-printer/-/wast-printer-1.14.1.tgz",
++      "integrity": "sha512-kPSSXE6De1XOR820C90RIo2ogvZG+c3KiHzqUoO/F34Y2shGzesfqv7o57xrxovZJH/MetF5UjroJ/R/3isoiw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@webassemblyjs/ast": "1.14.1",
++        "@xtuc/long": "4.2.2"
++      }
++    },
++    "node_modules/@xtuc/ieee754": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/@xtuc/ieee754/-/ieee754-1.2.0.tgz",
++      "integrity": "sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "peer": true
++    },
++    "node_modules/@xtuc/long": {
++      "version": "4.2.2",
++      "resolved": "https://registry.npmjs.org/@xtuc/long/-/long-4.2.2.tgz",
++      "integrity": "sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "peer": true
++    },
++    "node_modules/@zip.js/zip.js": {
++      "version": "2.8.21",
++      "resolved": "https://registry.npmjs.org/@zip.js/zip.js/-/zip.js-2.8.21.tgz",
++      "integrity": "sha512-fkyzXISE3IMrstDO1AgPkJCx14MYHP/suIGiAovEYEuBjq3mffsuL6aMV7ohOSjW4rXtuACuUfpA3GtITgdtYg==",
++      "license": "BSD-3-Clause",
++      "engines": {
++        "bun": ">=0.7.0",
++        "deno": ">=1.0.0",
++        "node": ">=18.0.0"
++      }
++    },
+     "node_modules/accessor-fn": {
+       "version": "1.5.3",
+       "resolved": "https://registry.npmjs.org/accessor-fn/-/accessor-fn-1.5.3.tgz",
+@@ -2359,12 +2739,11 @@
+       }
+     },
+     "node_modules/acorn": {
+-      "version": "8.15.0",
+-      "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.15.0.tgz",
+-      "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
++      "version": "8.16.0",
++      "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz",
++      "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2372,6 +2751,20 @@
+         "node": ">=0.4.0"
+       }
+     },
++    "node_modules/acorn-import-phases": {
++      "version": "1.0.4",
++      "resolved": "https://registry.npmjs.org/acorn-import-phases/-/acorn-import-phases-1.0.4.tgz",
++      "integrity": "sha512-wKmbr/DDiIXzEOiWrTTUcDm24kQ2vGfZQvM2fwg2vXqR5uW6aapr7ObPtj1th32b9u90/Pf4AItvdTh42fBmVQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=10.13.0"
++      },
++      "peerDependencies": {
++        "acorn": "^8.14.0"
++      }
++    },
+     "node_modules/acorn-jsx": {
+       "version": "5.3.2",
+       "resolved": "https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz",
+@@ -2409,6 +2802,48 @@
+         "url": "https://github.com/sponsors/epoberezkin"
+       }
+     },
++    "node_modules/ajv-formats": {
++      "version": "2.1.1",
++      "resolved": "https://registry.npmjs.org/ajv-formats/-/ajv-formats-2.1.1.tgz",
++      "integrity": "sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ajv": "^8.0.0"
++      },
++      "peerDependencies": {
++        "ajv": "^8.0.0"
++      },
++      "peerDependenciesMeta": {
++        "ajv": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/ajv-formats/node_modules/ajv": {
++      "version": "8.18.0",
++      "resolved": "https://registry.npmjs.org/ajv/-/ajv-8.18.0.tgz",
++      "integrity": "sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "fast-deep-equal": "^3.1.3",
++        "fast-uri": "^3.0.1",
++        "json-schema-traverse": "^1.0.0",
++        "require-from-string": "^2.0.2"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/epoberezkin"
++      }
++    },
++    "node_modules/ajv-formats/node_modules/json-schema-traverse": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-1.0.0.tgz",
++      "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/ansi-regex": {
+       "version": "5.0.1",
+       "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz",
+@@ -2677,6 +3112,18 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/autolinker": {
++      "version": "4.1.5",
++      "resolved": "https://registry.npmjs.org/autolinker/-/autolinker-4.1.5.tgz",
++      "integrity": "sha512-vEfYZPmvVOIuE567XBVCsx8SBgOYtjB2+S1iAaJ+HgH+DNjAcrHem2hmAeC9yaNGWayicv4yR+9UaJlkF3pvtw==",
++      "license": "MIT",
++      "dependencies": {
++        "tslib": "^2.8.1"
++      },
++      "engines": {
++        "pnpm": ">=10.10.0"
++      }
++    },
+     "node_modules/autoprefixer": {
+       "version": "10.4.21",
+       "resolved": "https://registry.npmjs.org/autoprefixer/-/autoprefixer-10.4.21.tgz",
+@@ -2758,12 +3205,15 @@
+       "license": "MIT"
+     },
+     "node_modules/baseline-browser-mapping": {
+-      "version": "2.8.5",
+-      "resolved": "https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.8.5.tgz",
+-      "integrity": "sha512-TiU4qUT9jdCuh4aVOG7H1QozyeI2sZRqoRPdqBIaslfNt4WUSanRBueAwl2x5jt4rXBMim3lIN2x6yT8PDi24Q==",
++      "version": "2.10.0",
++      "resolved": "https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.0.tgz",
++      "integrity": "sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==",
+       "license": "Apache-2.0",
+       "bin": {
+-        "baseline-browser-mapping": "dist/cli.js"
++        "baseline-browser-mapping": "dist/cli.cjs"
++      },
++      "engines": {
++        "node": ">=6.0.0"
+       }
+     },
+     "node_modules/bidi-js": {
+@@ -2789,6 +3239,12 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/bitmap-sdf": {
++      "version": "1.0.4",
++      "resolved": "https://registry.npmjs.org/bitmap-sdf/-/bitmap-sdf-1.0.4.tgz",
++      "integrity": "sha512-1G3U4n5JE6RAiALMxu0p1XmeZkTeCwGKykzsLTCqVzfSDaN6S7fKnkIkfejogz+iwqBWc0UYAIKnKHNN7pSfDg==",
++      "license": "MIT"
++    },
+     "node_modules/brace-expansion": {
+       "version": "1.1.12",
+       "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-1.1.12.tgz",
+@@ -2814,9 +3270,9 @@
+       }
+     },
+     "node_modules/browserslist": {
+-      "version": "4.26.2",
+-      "resolved": "https://registry.npmjs.org/browserslist/-/browserslist-4.26.2.tgz",
+-      "integrity": "sha512-ECFzp6uFOSB+dcZ5BK/IBaGWssbSYBHvuMeMt3MMFyhI0Z8SqGgEkBLARgpRH3hutIgPVsALcMwbDrJqPxQ65A==",
++      "version": "4.28.1",
++      "resolved": "https://registry.npmjs.org/browserslist/-/browserslist-4.28.1.tgz",
++      "integrity": "sha512-ZC5Bd0LgJXgwGqUknZY/vkUQ04r8NXnJZ3yYi4vDmSiZmC/pdSN0NbNRPxZpbtO4uAfDUAFffO8IZoM3Gj8IkA==",
+       "funding": [
+         {
+           "type": "opencollective",
+@@ -2832,13 +3288,12 @@
+         }
+       ],
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+-        "baseline-browser-mapping": "^2.8.3",
+-        "caniuse-lite": "^1.0.30001741",
+-        "electron-to-chromium": "^1.5.218",
+-        "node-releases": "^2.0.21",
+-        "update-browserslist-db": "^1.1.3"
++        "baseline-browser-mapping": "^2.9.0",
++        "caniuse-lite": "^1.0.30001759",
++        "electron-to-chromium": "^1.5.263",
++        "node-releases": "^2.0.27",
++        "update-browserslist-db": "^1.2.0"
+       },
+       "bin": {
+         "browserslist": "cli.js"
+@@ -2847,6 +3302,14 @@
+         "node": "^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7"
+       }
+     },
++    "node_modules/buffer-from": {
++      "version": "1.1.2",
++      "resolved": "https://registry.npmjs.org/buffer-from/-/buffer-from-1.1.2.tgz",
++      "integrity": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/busboy": {
+       "version": "1.6.0",
+       "resolved": "https://registry.npmjs.org/busboy/-/busboy-1.6.0.tgz",
+@@ -2929,9 +3392,9 @@
+       }
+     },
+     "node_modules/caniuse-lite": {
+-      "version": "1.0.30001743",
+-      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001743.tgz",
+-      "integrity": "sha512-e6Ojr7RV14Un7dz6ASD0aZDmQPT/A+eZU+nuTNfjqmRrmkmQlnTNWH0SKmqagx9PeW87UVqapSurtAXifmtdmw==",
++      "version": "1.0.30001774",
++      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001774.tgz",
++      "integrity": "sha512-DDdwPGz99nmIEv216hKSgLD+D4ikHQHjBC/seF98N9CPqRX4M5mSxT9eTV6oyisnJcuzxtZy4n17yKKQYmYQOA==",
+       "funding": [
+         {
+           "type": "opencollective",
+@@ -2948,6 +3411,24 @@
+       ],
+       "license": "CC-BY-4.0"
+     },
++    "node_modules/cesium": {
++      "version": "1.138.0",
++      "resolved": "https://registry.npmjs.org/cesium/-/cesium-1.138.0.tgz",
++      "integrity": "sha512-YX7Ttd4LzAxunuzcKPyOCQa+BPc2RmenqnkM5uZkk/GVwor724bd+F3kdVP4IyMbTgxFkchXuX2Aa8L1Y0/ZxA==",
++      "license": "Apache-2.0",
++      "workspaces": [
++        "packages/engine",
++        "packages/widgets",
++        "packages/sandcastle"
++      ],
++      "dependencies": {
++        "@cesium/engine": "^22.3.0",
++        "@cesium/widgets": "^14.3.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      }
++    },
+     "node_modules/chai": {
+       "version": "6.2.2",
+       "resolved": "https://registry.npmjs.org/chai/-/chai-6.2.2.tgz",
+@@ -3013,7 +3494,18 @@
+         "node": ">= 6"
+       }
+     },
+-    "node_modules/client-only": {
++    "node_modules/chrome-trace-event": {
++      "version": "1.0.4",
++      "resolved": "https://registry.npmjs.org/chrome-trace-event/-/chrome-trace-event-1.0.4.tgz",
++      "integrity": "sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=6.0"
++      }
++    },
++    "node_modules/client-only": {
+       "version": "0.0.1",
+       "resolved": "https://registry.npmjs.org/client-only/-/client-only-0.0.1.tgz",
+       "integrity": "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==",
+@@ -3056,6 +3548,30 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/copy-webpack-plugin": {
++      "version": "13.0.1",
++      "resolved": "https://registry.npmjs.org/copy-webpack-plugin/-/copy-webpack-plugin-13.0.1.tgz",
++      "integrity": "sha512-J+YV3WfhY6W/Xf9h+J1znYuqTye2xkBUIGyTPWuBAT27qajBa5mR4f8WBmfDY3YjRftT2kqZZiLi1qf0H+UOFw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "glob-parent": "^6.0.1",
++        "normalize-path": "^3.0.0",
++        "schema-utils": "^4.2.0",
++        "serialize-javascript": "^6.0.2",
++        "tinyglobby": "^0.2.12"
++      },
++      "engines": {
++        "node": ">= 18.12.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/webpack"
++      },
++      "peerDependencies": {
++        "webpack": "^5.1.0"
++      }
++    },
+     "node_modules/cross-spawn": {
+       "version": "7.0.6",
+       "resolved": "https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz",
+@@ -3470,6 +3986,7 @@
+       "integrity": "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "engines": {
+         "node": ">=6"
+       }
+@@ -3519,7 +4036,23 @@
+       "resolved": "https://registry.npmjs.org/dom-accessibility-api/-/dom-accessibility-api-0.5.16.tgz",
+       "integrity": "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==",
+       "dev": true,
+-      "license": "MIT"
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/dompurify": {
++      "version": "3.3.1",
++      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.3.1.tgz",
++      "integrity": "sha512-qkdCKzLNtrgPFP1Vo+98FRzJnBRGe4ffyCea9IwHB1fyxPOeNTHpLKYGd4Uk9xvNoH0ZoOjwZxNptyMwqrId1Q==",
++      "license": "(MPL-2.0 OR Apache-2.0)",
++      "optionalDependencies": {
++        "@types/trusted-types": "^2.0.7"
++      }
++    },
++    "node_modules/draco3d": {
++      "version": "1.5.7",
++      "resolved": "https://registry.npmjs.org/draco3d/-/draco3d-1.5.7.tgz",
++      "integrity": "sha512-m6WCKt/erDXcw+70IJXnG7M3awwQPAsZvJGX5zY7beBqpELw6RDGkYVU0W43AFxye4pDZ5i2Lbyc/NNGqwjUVQ==",
++      "license": "Apache-2.0"
+     },
+     "node_modules/dunder-proto": {
+       "version": "1.0.1",
+@@ -3550,9 +4083,9 @@
+       "license": "MIT"
+     },
+     "node_modules/electron-to-chromium": {
+-      "version": "1.5.220",
+-      "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.220.tgz",
+-      "integrity": "sha512-TWXijEwR1ggr4BdAKrb1nMNqYLTx1/4aD1fkeZU+FVJGTKu53/T7UyHKXlqEX3Ub02csyHePbHmkvnrjcaYzMA==",
++      "version": "1.5.302",
++      "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.302.tgz",
++      "integrity": "sha512-sM6HAN2LyK82IyPBpznDRqlTQAtuSaO+ShzFiWTvoMJLHyZ+Y39r8VMfHzwbU8MVBzQ4Wdn85+wlZl2TLGIlwg==",
+       "license": "ISC"
+     },
+     "node_modules/emoji-regex": {
+@@ -3562,6 +4095,21 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/enhanced-resolve": {
++      "version": "5.19.0",
++      "resolved": "https://registry.npmjs.org/enhanced-resolve/-/enhanced-resolve-5.19.0.tgz",
++      "integrity": "sha512-phv3E1Xl4tQOShqSte26C7Fl84EwUdZsyOuSSk9qtAGyyQs2s3jJzComh+Abf4g187lUUAvH+H26omrqia2aGg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "graceful-fs": "^4.2.4",
++        "tapable": "^2.3.0"
++      },
++      "engines": {
++        "node": ">=10.13.0"
++      }
++    },
+     "node_modules/entities": {
+       "version": "6.0.1",
+       "resolved": "https://registry.npmjs.org/entities/-/entities-6.0.1.tgz",
+@@ -3830,7 +4378,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3999,7 +4546,6 @@
+       "integrity": "sha512-whOE1HFo/qJDyX4SnXzP4N6zOWn79WhnCUY/iDR0mPfQZO8wcYE4JClzI2oZrhBnnMUCBCHZhO6VQyoBU95mZA==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@rtsao/scc": "^1.1.0",
+         "array-includes": "^3.1.9",
+@@ -4282,6 +4828,17 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/events": {
++      "version": "3.3.0",
++      "resolved": "https://registry.npmjs.org/events/-/events-3.3.0.tgz",
++      "integrity": "sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=0.8.x"
++      }
++    },
+     "node_modules/expect-type": {
+       "version": "1.3.0",
+       "resolved": "https://registry.npmjs.org/expect-type/-/expect-type-1.3.0.tgz",
+@@ -4343,6 +4900,23 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/fast-uri": {
++      "version": "3.1.0",
++      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.0.tgz",
++      "integrity": "sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fastify"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/fastify"
++        }
++      ],
++      "license": "BSD-3-Clause"
++    },
+     "node_modules/fastq": {
+       "version": "1.19.1",
+       "resolved": "https://registry.npmjs.org/fastq/-/fastq-1.19.1.tgz",
+@@ -4683,6 +5257,14 @@
+         "node": ">=10.13.0"
+       }
+     },
++    "node_modules/glob-to-regexp": {
++      "version": "0.4.1",
++      "resolved": "https://registry.npmjs.org/glob-to-regexp/-/glob-to-regexp-0.4.1.tgz",
++      "integrity": "sha512-lkX1HJXwyMcprw/5YUZc2s7DrpAiHB21/V+E1rHUrVNokkvB6bqMzT0VfV6/86ZNabt1k14YOIaT7nDvOX3Iiw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "peer": true
++    },
+     "node_modules/glob/node_modules/brace-expansion": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-2.0.2.tgz",
+@@ -4799,6 +5381,12 @@
+       "integrity": "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==",
+       "license": "ISC"
+     },
++    "node_modules/grapheme-splitter": {
++      "version": "1.0.4",
++      "resolved": "https://registry.npmjs.org/grapheme-splitter/-/grapheme-splitter-1.0.4.tgz",
++      "integrity": "sha512-bzh50DW9kTPM00T8y4o8vQg89Di9oLJVLW/KaOGIXJWP/iqCN6WKYkbNOF04vFLJhwcpYUh9ydh/+5vpOqV4YQ==",
++      "license": "MIT"
++    },
+     "node_modules/graphemer": {
+       "version": "1.4.0",
+       "resolved": "https://registry.npmjs.org/graphemer/-/graphemer-1.4.0.tgz",
+@@ -5552,6 +6140,39 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/jest-worker": {
++      "version": "27.5.1",
++      "resolved": "https://registry.npmjs.org/jest-worker/-/jest-worker-27.5.1.tgz",
++      "integrity": "sha512-7vuh85V5cdDofPyxn58nrPjBktZo0u9x1g8WtjQol+jZDaE+fhN+cIvTj11GndBnMnyfrUOG1sZQxCdjKh+DKg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@types/node": "*",
++        "merge-stream": "^2.0.0",
++        "supports-color": "^8.0.0"
++      },
++      "engines": {
++        "node": ">= 10.13.0"
++      }
++    },
++    "node_modules/jest-worker/node_modules/supports-color": {
++      "version": "8.1.1",
++      "resolved": "https://registry.npmjs.org/supports-color/-/supports-color-8.1.1.tgz",
++      "integrity": "sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "has-flag": "^4.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/supports-color?sponsor=1"
++      }
++    },
+     "node_modules/jiti": {
+       "version": "1.21.7",
+       "resolved": "https://registry.npmjs.org/jiti/-/jiti-1.21.7.tgz",
+@@ -5587,7 +6208,6 @@
+       "integrity": "sha512-0+MoQNYyr2rBHqO1xilltfDjV9G7ymYGlAUazgcDLQaUf8JDHbuGwsxN6U9qWaElZ4w1B2r7yEGIL3GdeW3Rug==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@acemir/cssom": "^0.9.31",
+         "@asamuzakjp/dom-selector": "^6.8.1",
+@@ -5623,6 +6243,15 @@
+         }
+       }
+     },
++    "node_modules/jsep": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/jsep/-/jsep-1.4.0.tgz",
++      "integrity": "sha512-B7qPcEVE3NVkmSJbaYxvv4cHkVW7DQsZz13pUMrfS8z8Q/BuShN+gcTXrUlPiGqM2/t/EEaI030bpxMqY8gMlw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 10.16.0"
++      }
++    },
+     "node_modules/json-buffer": {
+       "version": "3.0.1",
+       "resolved": "https://registry.npmjs.org/json-buffer/-/json-buffer-3.0.1.tgz",
+@@ -5630,6 +6259,14 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/json-parse-even-better-errors": {
++      "version": "2.3.1",
++      "resolved": "https://registry.npmjs.org/json-parse-even-better-errors/-/json-parse-even-better-errors-2.3.1.tgz",
++      "integrity": "sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/json-schema-traverse": {
+       "version": "0.4.1",
+       "resolved": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-0.4.1.tgz",
+@@ -5685,6 +6322,12 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/kdbush": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/kdbush/-/kdbush-4.0.2.tgz",
++      "integrity": "sha512-WbCVYJ27Sz8zi9Q7Q0xHC+05iwkm3Znipc2XTlrnJbsHMYktW4hPhXUE8Ys1engBrvffoSCqbil1JQAa7clRpA==",
++      "license": "ISC"
++    },
+     "node_modules/keyv": {
+       "version": "4.5.4",
+       "resolved": "https://registry.npmjs.org/keyv/-/keyv-4.5.4.tgz",
+@@ -5695,6 +6338,12 @@
+         "json-buffer": "3.0.1"
+       }
+     },
++    "node_modules/ktx-parse": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/ktx-parse/-/ktx-parse-1.1.0.tgz",
++      "integrity": "sha512-mKp3y+FaYgR7mXWAbyyzpa/r1zDWeaunH+INJO4fou3hb45XuNSwar+7llrRyvpMWafxSIi99RNFJ05MHedaJQ==",
++      "license": "MIT"
++    },
+     "node_modules/language-subtag-registry": {
+       "version": "0.3.23",
+       "resolved": "https://registry.npmjs.org/language-subtag-registry/-/language-subtag-registry-0.3.23.tgz",
+@@ -5715,6 +6364,12 @@
+         "node": ">=0.10"
+       }
+     },
++    "node_modules/lerc": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/lerc/-/lerc-2.0.0.tgz",
++      "integrity": "sha512-7qo1Mq8ZNmaR4USHHm615nEW2lPeeWJ3bTyoqFbd35DLx0LUH7C6ptt5FDCTAlbIzs3+WKrk5SkJvw8AFDE2hg==",
++      "license": "Apache-2.0"
++    },
+     "node_modules/levn": {
+       "version": "0.4.1",
+       "resolved": "https://registry.npmjs.org/levn/-/levn-0.4.1.tgz",
+@@ -5749,6 +6404,21 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/loader-runner": {
++      "version": "4.3.1",
++      "resolved": "https://registry.npmjs.org/loader-runner/-/loader-runner-4.3.1.tgz",
++      "integrity": "sha512-IWqP2SCPhyVFTBtRcgMHdzlf9ul25NwaFx4wCEH/KjAXuuHY4yNjvPXsBokp8jCB936PyWRaPKUNh8NvylLp2Q==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=6.11.5"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/webpack"
++      }
++    },
+     "node_modules/locate-path": {
+       "version": "6.0.0",
+       "resolved": "https://registry.npmjs.org/locate-path/-/locate-path-6.0.0.tgz",
+@@ -5778,6 +6448,12 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/long": {
++      "version": "5.3.2",
++      "resolved": "https://registry.npmjs.org/long/-/long-5.3.2.tgz",
++      "integrity": "sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==",
++      "license": "Apache-2.0"
++    },
+     "node_modules/loose-envify": {
+       "version": "1.4.0",
+       "resolved": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
+@@ -5812,6 +6488,7 @@
+       "integrity": "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "bin": {
+         "lz-string": "bin/bin.js"
+       }
+@@ -5843,6 +6520,14 @@
+       "dev": true,
+       "license": "CC0-1.0"
+     },
++    "node_modules/merge-stream": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/merge-stream/-/merge-stream-2.0.0.tgz",
++      "integrity": "sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/merge2": {
+       "version": "1.4.1",
+       "resolved": "https://registry.npmjs.org/merge2/-/merge2-1.4.1.tgz",
+@@ -5853,6 +6538,18 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/mersenne-twister": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/mersenne-twister/-/mersenne-twister-1.1.0.tgz",
++      "integrity": "sha512-mUYWsMKNrm4lfygPkL3OfGzOPTR2DBlTkBNHM//F6hGp8cLThY897crAlk3/Jo17LEOOjQUrNAx6DvgO77QJkA==",
++      "license": "MIT"
++    },
++    "node_modules/meshoptimizer": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/meshoptimizer/-/meshoptimizer-1.0.1.tgz",
++      "integrity": "sha512-Vix+QlA1YYT3FwmBBZ+49cE5y/b+pRrcXKqGpS5ouh33d3lSp2PoTpCw19E0cKDFWalembrHnIaZetf27a+W2g==",
++      "license": "MIT"
++    },
+     "node_modules/micromatch": {
+       "version": "4.0.8",
+       "resolved": "https://registry.npmjs.org/micromatch/-/micromatch-4.0.8.tgz",
+@@ -5867,6 +6564,31 @@
+         "node": ">=8.6"
+       }
+     },
++    "node_modules/mime-db": {
++      "version": "1.52.0",
++      "resolved": "https://registry.npmjs.org/mime-db/-/mime-db-1.52.0.tgz",
++      "integrity": "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
++    "node_modules/mime-types": {
++      "version": "2.1.35",
++      "resolved": "https://registry.npmjs.org/mime-types/-/mime-types-2.1.35.tgz",
++      "integrity": "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "mime-db": "1.52.0"
++      },
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
+     "node_modules/min-indent": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/min-indent/-/min-indent-1.0.1.tgz",
+@@ -5985,6 +6707,14 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/neo-async": {
++      "version": "2.6.2",
++      "resolved": "https://registry.npmjs.org/neo-async/-/neo-async-2.6.2.tgz",
++      "integrity": "sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/next": {
+       "version": "14.2.32",
+       "resolved": "https://registry.npmjs.org/next/-/next-14.2.32.tgz",
+@@ -6064,9 +6794,9 @@
+       }
+     },
+     "node_modules/node-releases": {
+-      "version": "2.0.21",
+-      "resolved": "https://registry.npmjs.org/node-releases/-/node-releases-2.0.21.tgz",
+-      "integrity": "sha512-5b0pgg78U3hwXkCM8Z9b2FJdPZlr9Psr9V2gQPESdGHqbntyFJKFW4r5TeWGFzafGY3hzs1JC62VEQMbl1JFkw==",
++      "version": "2.0.27",
++      "resolved": "https://registry.npmjs.org/node-releases/-/node-releases-2.0.27.tgz",
++      "integrity": "sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==",
+       "license": "MIT"
+     },
+     "node_modules/normalize-path": {
+@@ -6088,6 +6818,12 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/nosleep.js": {
++      "version": "0.12.0",
++      "resolved": "https://registry.npmjs.org/nosleep.js/-/nosleep.js-0.12.0.tgz",
++      "integrity": "sha512-9d1HbpKLh3sdWlhXMhU6MMH+wQzKkrgfRkYV0EBdvt99YJfj0ilCJrWRDYG2130Tm4GXbEoTCx5b34JSaP+HhA==",
++      "license": "MIT"
++    },
+     "node_modules/object-assign": {
+       "version": "4.1.1",
+       "resolved": "https://registry.npmjs.org/object-assign/-/object-assign-4.1.1.tgz",
+@@ -6309,6 +7045,12 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/pako": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/pako/-/pako-2.1.0.tgz",
++      "integrity": "sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==",
++      "license": "(MIT AND Zlib)"
++    },
+     "node_modules/parent-module": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/parent-module/-/parent-module-1.0.1.tgz",
+@@ -6495,7 +7237,6 @@
+         }
+       ],
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "nanoid": "^3.3.11",
+         "picocolors": "^1.1.1",
+@@ -6621,6 +7362,7 @@
+       "integrity": "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "dependencies": {
+         "ansi-regex": "^5.0.1",
+         "ansi-styles": "^5.0.0",
+@@ -6636,6 +7378,7 @@
+       "integrity": "sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==",
+       "dev": true,
+       "license": "MIT",
++      "peer": true,
+       "engines": {
+         "node": ">=10"
+       },
+@@ -6648,7 +7391,8 @@
+       "resolved": "https://registry.npmjs.org/react-is/-/react-is-17.0.2.tgz",
+       "integrity": "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==",
+       "dev": true,
+-      "license": "MIT"
++      "license": "MIT",
++      "peer": true
+     },
+     "node_modules/prop-types": {
+       "version": "15.8.1",
+@@ -6661,6 +7405,30 @@
+         "react-is": "^16.13.1"
+       }
+     },
++    "node_modules/protobufjs": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/protobufjs/-/protobufjs-8.0.0.tgz",
++      "integrity": "sha512-jx6+sE9h/UryaCZhsJWbJtTEy47yXoGNYI4z8ZaRncM0zBKeRqjO2JEcOUYwrYGb1WLhXM1FfMzW3annvFv0rw==",
++      "hasInstallScript": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "@protobufjs/aspromise": "^1.1.2",
++        "@protobufjs/base64": "^1.1.2",
++        "@protobufjs/codegen": "^2.0.4",
++        "@protobufjs/eventemitter": "^1.1.0",
++        "@protobufjs/fetch": "^1.1.0",
++        "@protobufjs/float": "^1.0.2",
++        "@protobufjs/inquire": "^1.1.0",
++        "@protobufjs/path": "^1.1.2",
++        "@protobufjs/pool": "^1.1.0",
++        "@protobufjs/utf8": "^1.1.0",
++        "@types/node": ">=13.7.0",
++        "long": "^5.0.0"
++      },
++      "engines": {
++        "node": ">=12.0.0"
++      }
++    },
+     "node_modules/punycode": {
+       "version": "2.3.1",
+       "resolved": "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz",
+@@ -6692,12 +7460,36 @@
+       ],
+       "license": "MIT"
+     },
++    "node_modules/quickselect": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/quickselect/-/quickselect-3.0.0.tgz",
++      "integrity": "sha512-XdjUArbK4Bm5fLLvlm5KpTFOiOThgfWWI4axAZDWg4E/0mKdZyI9tNEfds27qCi1ze/vwTR16kvmmGhRra3c2g==",
++      "license": "ISC"
++    },
++    "node_modules/randombytes": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/randombytes/-/randombytes-2.1.0.tgz",
++      "integrity": "sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "safe-buffer": "^5.1.0"
++      }
++    },
++    "node_modules/rbush": {
++      "version": "4.0.1",
++      "resolved": "https://registry.npmjs.org/rbush/-/rbush-4.0.1.tgz",
++      "integrity": "sha512-IP0UpfeWQujYC8Jg162rMNc01Rf0gWMMAb2Uxus/Q0qOFw4lCcq6ZnQEZwUoJqWyUGJ9th7JjwI4yIWo+uvoAQ==",
++      "license": "MIT",
++      "dependencies": {
++        "quickselect": "^3.0.0"
++      }
++    },
+     "node_modules/react": {
+       "version": "18.3.1",
+       "resolved": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+       "integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "loose-envify": "^1.1.0"
+       },
+@@ -6710,7 +7502,6 @@
+       "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+       "integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "loose-envify": "^1.1.0",
+         "scheduler": "^0.23.2"
+@@ -6848,6 +7639,20 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/resium": {
++      "version": "1.19.4",
++      "resolved": "https://registry.npmjs.org/resium/-/resium-1.19.4.tgz",
++      "integrity": "sha512-RW0ffHlQUbgqbc0jDaF2Dnor/GKbiz5s5AKdamEKxMJfxiwQNgtgfaKK7UvafFpX25Y2J4DZP1MclTlEQ/5YUw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "peerDependencies": {
++        "cesium": "1.x",
++        "react": ">=18.2.0",
++        "react-dom": ">=18.2.0"
++      }
++    },
+     "node_modules/resolve": {
+       "version": "1.22.10",
+       "resolved": "https://registry.npmjs.org/resolve/-/resolve-1.22.10.tgz",
+@@ -7034,6 +7839,27 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/safe-buffer": {
++      "version": "5.2.1",
++      "resolved": "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.2.1.tgz",
++      "integrity": "sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/feross"
++        },
++        {
++          "type": "patreon",
++          "url": "https://www.patreon.com/feross"
++        },
++        {
++          "type": "consulting",
++          "url": "https://feross.org/support"
++        }
++      ],
++      "license": "MIT"
++    },
+     "node_modules/safe-push-apply": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/safe-push-apply/-/safe-push-apply-1.0.0.tgz",
+@@ -7091,6 +7917,63 @@
+         "loose-envify": "^1.1.0"
+       }
+     },
++    "node_modules/schema-utils": {
++      "version": "4.3.3",
++      "resolved": "https://registry.npmjs.org/schema-utils/-/schema-utils-4.3.3.tgz",
++      "integrity": "sha512-eflK8wEtyOE6+hsaRVPxvUKYCpRgzLqDTb8krvAsRIwOGlHoSgYLgBXoubGgLd2fT41/OUYdb48v4k4WWHQurA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/json-schema": "^7.0.9",
++        "ajv": "^8.9.0",
++        "ajv-formats": "^2.1.1",
++        "ajv-keywords": "^5.1.0"
++      },
++      "engines": {
++        "node": ">= 10.13.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/webpack"
++      }
++    },
++    "node_modules/schema-utils/node_modules/ajv": {
++      "version": "8.18.0",
++      "resolved": "https://registry.npmjs.org/ajv/-/ajv-8.18.0.tgz",
++      "integrity": "sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "fast-deep-equal": "^3.1.3",
++        "fast-uri": "^3.0.1",
++        "json-schema-traverse": "^1.0.0",
++        "require-from-string": "^2.0.2"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/epoberezkin"
++      }
++    },
++    "node_modules/schema-utils/node_modules/ajv-keywords": {
++      "version": "5.1.0",
++      "resolved": "https://registry.npmjs.org/ajv-keywords/-/ajv-keywords-5.1.0.tgz",
++      "integrity": "sha512-YCS/JNFAUyr5vAuhk1DWm1CBxRHW9LbJ2ozWeemrIqpbsqKjHVxYPyi5GC0rjZIT5JxJ3virVTS8wk4i/Z+krw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "fast-deep-equal": "^3.1.3"
++      },
++      "peerDependencies": {
++        "ajv": "^8.8.2"
++      }
++    },
++    "node_modules/schema-utils/node_modules/json-schema-traverse": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-1.0.0.tgz",
++      "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/semver": {
+       "version": "7.7.2",
+       "resolved": "https://registry.npmjs.org/semver/-/semver-7.7.2.tgz",
+@@ -7104,6 +7987,16 @@
+         "node": ">=10"
+       }
+     },
++    "node_modules/serialize-javascript": {
++      "version": "6.0.2",
++      "resolved": "https://registry.npmjs.org/serialize-javascript/-/serialize-javascript-6.0.2.tgz",
++      "integrity": "sha512-Saa1xPByTTq2gdeFZYLLo+RFE35NHZkAbqZeWNd3BpzppeVisAqpDjcp8dyf6uIvEqJRd46jemmyA4iFIeVk8g==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "randombytes": "^2.1.0"
++      }
++    },
+     "node_modules/set-function-length": {
+       "version": "1.2.2",
+       "resolved": "https://registry.npmjs.org/set-function-length/-/set-function-length-1.2.2.tgz",
+@@ -7288,6 +8181,17 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/source-map": {
++      "version": "0.6.1",
++      "resolved": "https://registry.npmjs.org/source-map/-/source-map-0.6.1.tgz",
++      "integrity": "sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "peer": true,
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/source-map-js": {
+       "version": "1.2.1",
+       "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz",
+@@ -7297,6 +8201,18 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/source-map-support": {
++      "version": "0.5.21",
++      "resolved": "https://registry.npmjs.org/source-map-support/-/source-map-support-0.5.21.tgz",
++      "integrity": "sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "buffer-from": "^1.0.0",
++        "source-map": "^0.6.0"
++      }
++    },
+     "node_modules/stable-hash": {
+       "version": "0.0.5",
+       "resolved": "https://registry.npmjs.org/stable-hash/-/stable-hash-0.0.5.tgz",
+@@ -7739,6 +8655,85 @@
+         }
+       }
+     },
++    "node_modules/tapable": {
++      "version": "2.3.0",
++      "resolved": "https://registry.npmjs.org/tapable/-/tapable-2.3.0.tgz",
++      "integrity": "sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=6"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/webpack"
++      }
++    },
++    "node_modules/terser": {
++      "version": "5.46.0",
++      "resolved": "https://registry.npmjs.org/terser/-/terser-5.46.0.tgz",
++      "integrity": "sha512-jTwoImyr/QbOWFFso3YoU3ik0jBBDJ6JTOQiy/J2YxVJdZCc+5u7skhNwiOR3FQIygFqVUPHl7qbbxtjW2K3Qg==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "peer": true,
++      "dependencies": {
++        "@jridgewell/source-map": "^0.3.3",
++        "acorn": "^8.15.0",
++        "commander": "^2.20.0",
++        "source-map-support": "~0.5.20"
++      },
++      "bin": {
++        "terser": "bin/terser"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/terser-webpack-plugin": {
++      "version": "5.3.16",
++      "resolved": "https://registry.npmjs.org/terser-webpack-plugin/-/terser-webpack-plugin-5.3.16.tgz",
++      "integrity": "sha512-h9oBFCWrq78NyWWVcSwZarJkZ01c2AyGrzs1crmHZO3QUg9D61Wu4NPjBy69n7JqylFF5y+CsUZYmYEIZ3mR+Q==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@jridgewell/trace-mapping": "^0.3.25",
++        "jest-worker": "^27.4.5",
++        "schema-utils": "^4.3.0",
++        "serialize-javascript": "^6.0.2",
++        "terser": "^5.31.1"
++      },
++      "engines": {
++        "node": ">= 10.13.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/webpack"
++      },
++      "peerDependencies": {
++        "webpack": "^5.1.0"
++      },
++      "peerDependenciesMeta": {
++        "@swc/core": {
++          "optional": true
++        },
++        "esbuild": {
++          "optional": true
++        },
++        "uglify-js": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/terser/node_modules/commander": {
++      "version": "2.20.3",
++      "resolved": "https://registry.npmjs.org/commander/-/commander-2.20.3.tgz",
++      "integrity": "sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/text-table": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/text-table/-/text-table-0.2.0.tgz",
+@@ -7773,8 +8768,7 @@
+       "version": "0.183.1",
+       "resolved": "https://registry.npmjs.org/three/-/three-0.183.1.tgz",
+       "integrity": "sha512-Psv6bbd3d/M/01MT2zZ+VmD0Vj2dbWTNhfe4CuSg7w5TuW96M3NOyCVuh9SZQ05CpGmD7NEcJhZw4GVjhCYxfQ==",
+-      "license": "MIT",
+-      "peer": true
++      "license": "MIT"
+     },
+     "node_modules/three-conic-polygon-geometry": {
+       "version": "2.1.2",
+@@ -7945,7 +8939,6 @@
+       "integrity": "sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "engines": {
+         "node": ">=12"
+       },
+@@ -7996,6 +8989,26 @@
+         "node": ">=8.0"
+       }
+     },
++    "node_modules/topojson-client": {
++      "version": "3.1.0",
++      "resolved": "https://registry.npmjs.org/topojson-client/-/topojson-client-3.1.0.tgz",
++      "integrity": "sha512-605uxS6bcYxGXw9qi62XyrV6Q3xwbndjachmNxu8HWTtVPxZfEJN9fd/SZS1Q54Sn2y0TMyMxFj/cJINqGHrKw==",
++      "license": "ISC",
++      "dependencies": {
++        "commander": "2"
++      },
++      "bin": {
++        "topo2geo": "bin/topo2geo",
++        "topomerge": "bin/topomerge",
++        "topoquantize": "bin/topoquantize"
++      }
++    },
++    "node_modules/topojson-client/node_modules/commander": {
++      "version": "2.20.3",
++      "resolved": "https://registry.npmjs.org/commander/-/commander-2.20.3.tgz",
++      "integrity": "sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==",
++      "license": "MIT"
++    },
+     "node_modules/tough-cookie": {
+       "version": "6.0.0",
+       "resolved": "https://registry.npmjs.org/tough-cookie/-/tough-cookie-6.0.0.tgz",
+@@ -8171,7 +9184,6 @@
+       "integrity": "sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -8213,7 +9225,6 @@
+       "version": "6.21.0",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz",
+       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==",
+-      "dev": true,
+       "license": "MIT"
+     },
+     "node_modules/unrs-resolver": {
+@@ -8252,9 +9263,9 @@
+       }
+     },
+     "node_modules/update-browserslist-db": {
+-      "version": "1.1.3",
+-      "resolved": "https://registry.npmjs.org/update-browserslist-db/-/update-browserslist-db-1.1.3.tgz",
+-      "integrity": "sha512-UxhIZQ+QInVdunkDAaiazvvT/+fXL5Osr0JZlJulepYu6Jd7qJtDZjlur0emRlT71EN3ScPoE7gvsuIKKNavKw==",
++      "version": "1.2.3",
++      "resolved": "https://registry.npmjs.org/update-browserslist-db/-/update-browserslist-db-1.2.3.tgz",
++      "integrity": "sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==",
+       "funding": [
+         {
+           "type": "opencollective",
+@@ -8291,6 +9302,12 @@
+         "punycode": "^2.1.0"
+       }
+     },
++    "node_modules/urijs": {
++      "version": "1.19.11",
++      "resolved": "https://registry.npmjs.org/urijs/-/urijs-1.19.11.tgz",
++      "integrity": "sha512-HXgFDgDommxn5/bIv0cnQZsPhHDA90NPHD6+c/v21U5+Sx5hoP8+dP9IZXBU1gIfvdRfhG8cel9QNPeionfcCQ==",
++      "license": "MIT"
++    },
+     "node_modules/util-deprecate": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz",
+@@ -8397,7 +9414,6 @@
+       "integrity": "sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "engines": {
+         "node": ">=12"
+       },
+@@ -8509,6 +9525,21 @@
+         "node": ">=18"
+       }
+     },
++    "node_modules/watchpack": {
++      "version": "2.5.1",
++      "resolved": "https://registry.npmjs.org/watchpack/-/watchpack-2.5.1.tgz",
++      "integrity": "sha512-Zn5uXdcFNIA1+1Ei5McRd+iRzfhENPCe7LeABkJtNulSxjma+l7ltNx55BWZkRlwRnpOgHqxnjyaDgJnNXnqzg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "glob-to-regexp": "^0.4.1",
++        "graceful-fs": "^4.1.2"
++      },
++      "engines": {
++        "node": ">=10.13.0"
++      }
++    },
+     "node_modules/webidl-conversions": {
+       "version": "8.0.1",
+       "resolved": "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-8.0.1.tgz",
+@@ -8519,6 +9550,101 @@
+         "node": ">=20"
+       }
+     },
++    "node_modules/webpack": {
++      "version": "5.105.3",
++      "resolved": "https://registry.npmjs.org/webpack/-/webpack-5.105.3.tgz",
++      "integrity": "sha512-LLBBA4oLmT7sZdHiYE/PeVuifOxYyE2uL/V+9VQP7YSYdJU7bSf7H8bZRRxW8kEPMkmVjnrXmoR3oejIdX0xbg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@types/eslint-scope": "^3.7.7",
++        "@types/estree": "^1.0.8",
++        "@types/json-schema": "^7.0.15",
++        "@webassemblyjs/ast": "^1.14.1",
++        "@webassemblyjs/wasm-edit": "^1.14.1",
++        "@webassemblyjs/wasm-parser": "^1.14.1",
++        "acorn": "^8.16.0",
++        "acorn-import-phases": "^1.0.3",
++        "browserslist": "^4.28.1",
++        "chrome-trace-event": "^1.0.2",
++        "enhanced-resolve": "^5.19.0",
++        "es-module-lexer": "^2.0.0",
++        "eslint-scope": "5.1.1",
++        "events": "^3.2.0",
++        "glob-to-regexp": "^0.4.1",
++        "graceful-fs": "^4.2.11",
++        "json-parse-even-better-errors": "^2.3.1",
++        "loader-runner": "^4.3.1",
++        "mime-types": "^2.1.27",
++        "neo-async": "^2.6.2",
++        "schema-utils": "^4.3.3",
++        "tapable": "^2.3.0",
++        "terser-webpack-plugin": "^5.3.16",
++        "watchpack": "^2.5.1",
++        "webpack-sources": "^3.3.4"
++      },
++      "bin": {
++        "webpack": "bin/webpack.js"
++      },
++      "engines": {
++        "node": ">=10.13.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/webpack"
++      },
++      "peerDependenciesMeta": {
++        "webpack-cli": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/webpack-sources": {
++      "version": "3.3.4",
++      "resolved": "https://registry.npmjs.org/webpack-sources/-/webpack-sources-3.3.4.tgz",
++      "integrity": "sha512-7tP1PdV4vF+lYPnkMR0jMY5/la2ub5Fc/8VQrrU+lXkiM6C4TjVfGw7iKfyhnTQOsD+6Q/iKw0eFciziRgD58Q==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=10.13.0"
++      }
++    },
++    "node_modules/webpack/node_modules/es-module-lexer": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/es-module-lexer/-/es-module-lexer-2.0.0.tgz",
++      "integrity": "sha512-5POEcUuZybH7IdmGsD8wlf0AI55wMecM9rVBTI/qEAy2c1kTOm3DjFYjrBdI2K3BaJjJYfYFeRtM0t9ssnRuxw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/webpack/node_modules/eslint-scope": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/eslint-scope/-/eslint-scope-5.1.1.tgz",
++      "integrity": "sha512-2NxwbF/hZ0KpepYN0cNbo+FN6XoK7GaHlQhgx/hIZl6Va0bF45RQOOwhLIy8lQDbuCiadSLCBnH2CFYquit5bw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "peer": true,
++      "dependencies": {
++        "esrecurse": "^4.3.0",
++        "estraverse": "^4.1.1"
++      },
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
++    "node_modules/webpack/node_modules/estraverse": {
++      "version": "4.3.0",
++      "resolved": "https://registry.npmjs.org/estraverse/-/estraverse-4.3.0.tgz",
++      "integrity": "sha512-39nnKffWz8xN1BU/2c79n9nB9HDzo0niYUqx6xyqUnyoAnQyyWpOTdZEeiCch8BBu515t4wp9ZmgVfVhn9EBpw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "peer": true,
++      "engines": {
++        "node": ">=4.0"
++      }
++    },
+     "node_modules/whatwg-mimetype": {
+       "version": "5.0.0",
+       "resolved": "https://registry.npmjs.org/whatwg-mimetype/-/whatwg-mimetype-5.0.0.tgz",
+diff --git a/package.json b/package.json
+index 1b921d2..bb95211 100644
+--- a/package.json
++++ b/package.json
+@@ -11,16 +11,19 @@
+     "test:watch": "vitest",
+     "lint": "next lint",
+     "setup": "cp .env.example .env.local && echo 'Environment file created! Edit .env.local with your details, then run npm run dev'",
+-    "enrich:journey-media": "node scripts/enrich-journey-media.mjs --tag ticket-derived"
++    "enrich:journey-media": "node scripts/enrich-journey-media.mjs --tag ticket-derived",
++    "generate:routes": "node scripts/generate-journey-routes.mjs"
+   },
+   "dependencies": {
+     "autoprefixer": "^10.4.21",
++    "cesium": "^1.138.0",
+     "framer-motion": "^11.3.28",
+     "lucide-react": "^0.436.0",
+     "next": "^14.2.32",
+     "react": "^18",
+     "react-dom": "^18",
+-    "react-globe.gl": "^2.37.0"
++    "react-globe.gl": "^2.37.0",
++    "resium": "^1.19.4"
+   },
+   "devDependencies": {
+     "@testing-library/jest-dom": "^6.9.1",
+@@ -28,6 +31,7 @@
+     "@types/node": "^20",
+     "@types/react": "^18",
+     "@types/react-dom": "^18",
++    "copy-webpack-plugin": "^13.0.1",
+     "eslint": "^8",
+     "eslint-config-next": "14.2.7",
+     "jsdom": "^28.1.0",
+diff --git a/scripts/generate-journey-routes.mjs b/scripts/generate-journey-routes.mjs
+new file mode 100755
+index 0000000..63e91f8
+--- /dev/null
++++ b/scripts/generate-journey-routes.mjs
+@@ -0,0 +1,242 @@
++#!/usr/bin/env node
++
++/**
++ * Generate ground routes for journey segments
++ * Uses Mapbox Directions API to create waypoints for train/hike segments
++ * Output: src/data/journeyRoutes.json
++ */
++
++import fs from 'fs';
++import path from 'path';
++import { fileURLToPath } from 'url';
++
++const __filename = fileURLToPath(import.meta.url);
++const __dirname = path.dirname(__filename);
++
++// Configuration
++const MAPBOX_TOKEN = process.env.MAPBOX_ACCESS_TOKEN;
++const EVENTS_FILE = path.join(__dirname, '../src/data/journeyEvents.json');
++const OUTPUT_FILE = path.join(__dirname, '../src/data/journeyRoutes.json');
++
++// Transport modes that need ground routes
++const GROUND_TRANSPORT = ['train', 'hike', 'car'];
++
++/**
++ * Fetch route from Mapbox Directions API
++ * @param {number} fromLng
++ * @param {number} fromLat
++ * @param {number} toLng
++ * @param {number} toLat
++ * @param {string} profile - 'driving-traffic', 'walking', 'cycling'
++ */
++async function fetchMapboxRoute(fromLng, fromLat, toLng, toLat, profile = 'driving') {
++  if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'your_mapbox_token_here') {
++    console.warn('⚠️  No Mapbox token found. Using simple interpolation.');
++    return generateSimpleRoute(fromLng, fromLat, toLng, toLat);
++  }
++
++  const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLng},${fromLat};${toLng},${toLat}?geometries=geojson&steps=true&access_token=${MAPBOX_TOKEN}`;
++
++  try {
++    const response = await fetch(url);
++    if (!response.ok) {
++      throw new Error(`Mapbox API error: ${response.status}`);
++    }
++
++    const data = await response.json();
++    if (!data.routes || data.routes.length === 0) {
++      throw new Error('No route found');
++    }
++
++    const route = data.routes[0];
++    const coordinates = route.geometry.coordinates;
++
++    // Sample waypoints (too many points = heavy)
++    const sampledWaypoints = sampleWaypoints(coordinates, 30);
++
++    return {
++      waypoints: sampledWaypoints.map(([lng, lat]) => ({ lat, lng })),
++      distance: route.distance / 1000, // meters to km
++      duration: route.duration / 60, // seconds to minutes
++      generatedBy: 'mapbox-directions-api',
++    };
++  } catch (error) {
++    console.warn(`⚠️  Mapbox API failed: ${error.message}. Using simple interpolation.`);
++    return generateSimpleRoute(fromLng, fromLat, toLng, toLat);
++  }
++}
++
++/**
++ * Sample waypoints to reduce density
++ */
++function sampleWaypoints(coordinates, maxPoints) {
++  if (coordinates.length <= maxPoints) {
++    return coordinates;
++  }
++
++  const step = coordinates.length / maxPoints;
++  const sampled = [];
++
++  for (let i = 0; i < maxPoints; i++) {
++    const index = Math.floor(i * step);
++    sampled.push(coordinates[index]);
++  }
++
++  // Always include the last point
++  if (sampled[sampled.length - 1] !== coordinates[coordinates.length - 1]) {
++    sampled.push(coordinates[coordinates.length - 1]);
++  }
++
++  return sampled;
++}
++
++/**
++ * Generate simple interpolated route (fallback when no API token)
++ */
++function generateSimpleRoute(fromLng, fromLat, toLng, toLat) {
++  const waypoints = [];
++  const steps = 20;
++
++  for (let i = 0; i <= steps; i++) {
++    const t = i / steps;
++    const lat = fromLat + (toLat - fromLat) * t;
++    const lng = fromLng + (toLng - fromLng) * t;
++    waypoints.push({ lat, lng });
++  }
++
++  // Calculate approximate distance using Haversine formula
++  const distance = haversineDistance(fromLat, fromLng, toLat, toLng);
++
++  return {
++    waypoints,
++    distance,
++    duration: distance * 2, // Assume ~30 km/h average
++    generatedBy: 'simple-interpolation',
++  };
++}
++
++/**
++ * Calculate distance between two coordinates (Haversine formula)
++ */
++function haversineDistance(lat1, lon1, lat2, lon2) {
++  const R = 6371; // Earth's radius in km
++  const dLat = toRadians(lat2 - lat1);
++  const dLon = toRadians(lon2 - lon1);
++
++  const a =
++    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
++    Math.cos(toRadians(lat1)) *
++      Math.cos(toRadians(lat2)) *
++      Math.sin(dLon / 2) *
++      Math.sin(dLon / 2);
++
++  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
++  return R * c;
++}
++
++function toRadians(degrees) {
++  return degrees * (Math.PI / 180);
++}
++
++/**
++ * Get Mapbox profile based on transport mode
++ */
++function getMapboxProfile(transport) {
++  switch (transport) {
++    case 'hike':
++      return 'walking';
++    case 'train':
++    case 'car':
++      return 'driving';
++    default:
++      return 'driving';
++  }
++}
++
++/**
++ * Main function
++ */
++async function generateRoutes() {
++  console.log('🗺️  Generating journey routes...\n');
++
++  // Read journey events
++  const events = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8'));
++
++  const routes = {};
++  let prevEvent = null;
++
++  for (const event of events) {
++    if (!prevEvent) {
++      prevEvent = event;
++      continue;
++    }
++
++    // Check if this event has ground transport
++    if (GROUND_TRANSPORT.includes(event.transportFromPrevious)) {
++      console.log(`📍 ${prevEvent.locationName} → ${event.locationName} (${event.transportFromPrevious})`);
++
++      const profile = getMapboxProfile(event.transportFromPrevious);
++      const routeData = await fetchMapboxRoute(
++        prevEvent.lng,
++        prevEvent.lat,
++        event.lng,
++        event.lat,
++        profile
++      );
++
++      routes[event.id] = {
++        id: event.id,
++        from: {
++          lat: prevEvent.lat,
++          lng: prevEvent.lng,
++          name: prevEvent.locationName,
++        },
++        to: {
++          lat: event.lat,
++          lng: event.lng,
++          name: event.locationName,
++        },
++        transportMode: event.transportFromPrevious,
++        ...routeData,
++        generatedAt: new Date().toISOString(),
++      };
++
++      console.log(`   ✓ ${routeData.waypoints.length} waypoints, ${routeData.distance.toFixed(1)} km\n`);
++
++      // Rate limiting for Mapbox API
++      if (routeData.generatedBy === 'mapbox-directions-api') {
++        await new Promise((resolve) => setTimeout(resolve, 200));
++      }
++    }
++
++    prevEvent = event;
++  }
++
++  // Write output
++  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(routes, null, 2));
++
++  console.log(`✅ Generated ${Object.keys(routes).length} routes`);
++  console.log(`📁 Saved to: ${OUTPUT_FILE}\n`);
++
++  // Summary
++  const mapboxCount = Object.values(routes).filter(
++    (r) => r.generatedBy === 'mapbox-directions-api'
++  ).length;
++  const simpleCount = Object.values(routes).filter(
++    (r) => r.generatedBy === 'simple-interpolation'
++  ).length;
++
++  console.log('Summary:');
++  console.log(`  - Mapbox routes: ${mapboxCount}`);
++  console.log(`  - Simple interpolation: ${simpleCount}`);
++
++  if (simpleCount > 0 && !MAPBOX_TOKEN) {
++    console.log('\n💡 Tip: Set MAPBOX_ACCESS_TOKEN environment variable for accurate routes');
++  }
++}
++
++// Run
++generateRoutes().catch((error) => {
++  console.error('❌ Error:', error);
++  process.exit(1);
++});
+diff --git a/src/components/journey/CesiumViewer.tsx b/src/components/journey/CesiumViewer.tsx
+new file mode 100644
+index 0000000..1bc0fd3
+--- /dev/null
++++ b/src/components/journey/CesiumViewer.tsx
+@@ -0,0 +1,19 @@
++'use client';
++
++import dynamic from 'next/dynamic';
++import { ComponentType } from 'react';
++
++/**
++ * Dynamically import Cesium with no SSR
++ * Cesium requires browser APIs and cannot be server-rendered
++ */
++const CesiumViewerDynamic = dynamic(() => import('./CesiumViewerClient'), {
++  ssr: false,
++  loading: () => (
++    <div className="w-full h-full bg-slate-950 flex items-center justify-center">
++      <div className="text-slate-400 animate-pulse">Loading Globe...</div>
++    </div>
++  ),
++}) as ComponentType<any>;
++
++export default CesiumViewerDynamic;
+diff --git a/src/components/journey/CesiumViewerClient.tsx b/src/components/journey/CesiumViewerClient.tsx
+new file mode 100644
+index 0000000..0bbb093
+--- /dev/null
++++ b/src/components/journey/CesiumViewerClient.tsx
+@@ -0,0 +1,246 @@
++'use client';
++
++import { useEffect, useRef, useState } from 'react';
++import { Viewer, Entity, PolylineGraphics, PointGraphics, CameraFlyTo } from 'resium';
++import {
++  Cartesian3,
++  Color,
++  Ion,
++  Viewer as CesiumViewer,
++  Math as CesiumMath,
++  PolylineDashMaterialProperty,
++  SampledPositionProperty,
++  JulianDate,
++  Transforms,
++  HeadingPitchRoll,
++} from 'cesium';
++
++// Set Cesium Ion token if available
++if (typeof window !== 'undefined') {
++  const cesiumToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
++  if (cesiumToken && cesiumToken !== 'your_cesium_ion_token_here') {
++    Ion.defaultAccessToken = cesiumToken;
++  }
++}
++
++export interface CesiumJourneyProps {
++  events: any[];
++  routes: Record<string, any>;
++  currentEventIndex: number;
++  traveling: boolean;
++  travelProgress: number;
++}
++
++export default function CesiumViewerClient({
++  events = [],
++  routes = {},
++  currentEventIndex = 0,
++  traveling = false,
++  travelProgress = 0,
++}: CesiumJourneyProps) {
++  const viewerRef = useRef<CesiumViewer | null>(null);
++  const [ready, setReady] = useState(false);
++
++  useEffect(() => {
++    if (viewerRef.current) {
++      setReady(true);
++
++      // Configure viewer
++      const viewer = viewerRef.current;
++
++      // Disable default UI elements we don't need
++      viewer.animation.container.style.display = 'none';
++      viewer.timeline.container.style.display = 'none';
++      viewer.fullscreenButton.container.style.display = 'none';
++      viewer.vrButton.container.style.display = 'none';
++      viewer.geocoder.container.style.display = 'none';
++      viewer.homeButton.container.style.display = 'none';
++      viewer.sceneModePicker.container.style.display = 'none';
++      viewer.baseLayerPicker.container.style.display = 'none';
++      viewer.navigationHelpButton.container.style.display = 'none';
++
++      // Enable lighting and atmosphere
++      viewer.scene.globe.enableLighting = true;
++      viewer.scene.globe.atmosphereLightIntensity = 3.0;
++      viewer.scene.globe.atmosphereBrightnessShift = 0.4;
++
++      // Enable terrain if Cesium Ion token is available
++      const cesiumToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
++      if (cesiumToken && cesiumToken !== 'your_cesium_ion_token_here') {
++        viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
++          url: Cesium.IonResource.fromAssetId(1),
++          requestWaterMask: true,
++          requestVertexNormals: true,
++        });
++      }
++    }
++  }, [viewerRef.current]);
++
++  // Get current event
++  const currentEvent = events[currentEventIndex];
++  const prevEvent = currentEventIndex > 0 ? events[currentEventIndex - 1] : null;
++
++  // Camera position
++  const cameraDestination = currentEvent
++    ? Cartesian3.fromDegrees(currentEvent.lng, currentEvent.lat, 5000000) // 5000km altitude
++    : Cartesian3.fromDegrees(0, 0, 20000000);
++
++  // Generate flight arcs for completed journeys
++  const flightArcs = events
++    .slice(0, currentEventIndex)
++    .map((event, idx) => {
++      if (idx === 0 || event.transportFromPrevious !== 'flight') return null;
++
++      const prevEvt = events[idx - 1];
++      const start = Cartesian3.fromDegrees(prevEvt.lng, prevEvt.lat, 0);
++      const end = Cartesian3.fromDegrees(event.lng, event.lat, 0);
++
++      return {
++        id: `arc-${event.id}`,
++        positions: [start, end],
++        color: Color.fromCssColorString('#7dd3fc').withAlpha(0.6),
++      };
++    })
++    .filter(Boolean);
++
++  // Ground route entities
++  const groundRoutes = [];
++  if (traveling && prevEvent && currentEvent && routes[currentEvent.id]) {
++    const route = routes[currentEvent.id];
++    const waypoints = route.waypoints || [];
++
++    if (waypoints.length > 0) {
++      // Convert waypoints to Cartesian3 positions
++      const positions = waypoints.map((wp: { lat: number; lng: number }) =>
++        Cartesian3.fromDegrees(wp.lng, wp.lat, 0)
++      );
++
++      // Interpolate position based on travel progress
++      const currentWaypointIndex = Math.floor(travelProgress * (positions.length - 1));
++      const nextWaypointIndex = Math.min(currentWaypointIndex + 1, positions.length - 1);
++      const localProgress =
++        (travelProgress * (positions.length - 1)) % 1;
++
++      const currentPos = positions[currentWaypointIndex];
++      const nextPos = positions[nextWaypointIndex];
++
++      // Interpolated position
++      const entityPosition = Cartesian3.lerp(
++        currentPos,
++        nextPos,
++        localProgress,
++        new Cartesian3()
++      );
++
++      groundRoutes.push({
++        id: `route-${currentEvent.id}`,
++        positions,
++        entityPosition,
++        color:
++          currentEvent.transportFromPrevious === 'train'
++            ? Color.ORANGE
++            : currentEvent.transportFromPrevious === 'hike'
++            ? Color.GREEN
++            : Color.SKYBLUE,
++      });
++    }
++  }
++
++  return (
++    <div className="w-full h-full">
++      <Viewer
++        ref={viewerRef}
++        full
++        timeline={false}
++        animation={false}
++        baseLayerPicker={false}
++        fullscreenButton={false}
++        vrButton={false}
++        geocoder={false}
++        homeButton={false}
++        infoBox={false}
++        sceneModePicker={false}
++        selectionIndicator={false}
++        navigationHelpButton={false}
++        navigationInstructionsInitiallyVisible={false}
++        style={{ width: '100%', height: '100%' }}
++      >
++        {/* Camera flyTo on event change */}
++        {ready && (
++          <CameraFlyTo
++            destination={cameraDestination}
++            duration={2}
++            orientation={{
++              heading: 0,
++              pitch: CesiumMath.toRadians(-90),
++              roll: 0,
++            }}
++          />
++        )}
++
++        {/* Flight arcs */}
++        {flightArcs.map((arc) => (
++          <Entity key={arc.id} id={arc.id}>
++            <PolylineGraphics
++              positions={arc.positions}
++              width={2}
++              material={arc.color}
++              arcType={Cesium.ArcType.GEODESIC}
++            />
++          </Entity>
++        ))}
++
++        {/* Ground routes */}
++        {groundRoutes.map((route) => (
++          <>
++            {/* Path line */}
++            <Entity key={route.id} id={route.id}>
++              <PolylineGraphics
++                positions={route.positions}
++                width={4}
++                material={route.color.withAlpha(0.8)}
++                clampToGround
++              />
++            </Entity>
++
++            {/* Moving entity */}
++            <Entity
++              key={`${route.id}-entity`}
++              id={`${route.id}-entity`}
++              position={route.entityPosition}
++            >
++              <PointGraphics
++                pixelSize={12}
++                color={route.color}
++                outlineColor={Color.WHITE}
++                outlineWidth={2}
++              />
++            </Entity>
++          </>
++        ))}
++
++        {/* Event markers */}
++        {events.map((event, idx) => (
++          <Entity
++            key={event.id}
++            id={event.id}
++            position={Cartesian3.fromDegrees(event.lng, event.lat, 0)}
++          >
++            <PointGraphics
++              pixelSize={idx === currentEventIndex ? 10 : 6}
++              color={
++                idx === currentEventIndex
++                  ? Color.YELLOW
++                  : idx < currentEventIndex
++                  ? Color.LIGHTBLUE
++                  : Color.GRAY
++              }
++              outlineColor={Color.WHITE}
++              outlineWidth={idx === currentEventIndex ? 2 : 1}
++            />
++          </Entity>
++        ))}
++      </Viewer>
++    </div>
++  );
++}
+diff --git a/src/data/journeyRoutes.json b/src/data/journeyRoutes.json
+new file mode 100644
+index 0000000..71a1a22
+--- /dev/null
++++ b/src/data/journeyRoutes.json
+@@ -0,0 +1,1042 @@
++{
++  "paternal-grandparents-meet": {
++    "id": "paternal-grandparents-meet",
++    "from": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "to": {
++      "lat": 11.0168,
++      "lng": 76.9558,
++      "name": "Coimbatore"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      },
++      {
++        "lat": 10.798205,
++        "lng": 76.66985
++      },
++      {
++        "lat": 10.809709999999999,
++        "lng": 76.6849
++      },
++      {
++        "lat": 10.821215,
++        "lng": 76.69995
++      },
++      {
++        "lat": 10.83272,
++        "lng": 76.71499999999999
++      },
++      {
++        "lat": 10.844225,
++        "lng": 76.73004999999999
++      },
++      {
++        "lat": 10.85573,
++        "lng": 76.7451
++      },
++      {
++        "lat": 10.867234999999999,
++        "lng": 76.76015
++      },
++      {
++        "lat": 10.87874,
++        "lng": 76.7752
++      },
++      {
++        "lat": 10.890245,
++        "lng": 76.79025
++      },
++      {
++        "lat": 10.90175,
++        "lng": 76.80529999999999
++      },
++      {
++        "lat": 10.913255,
++        "lng": 76.82034999999999
++      },
++      {
++        "lat": 10.92476,
++        "lng": 76.83539999999999
++      },
++      {
++        "lat": 10.936265,
++        "lng": 76.85045
++      },
++      {
++        "lat": 10.94777,
++        "lng": 76.8655
++      },
++      {
++        "lat": 10.959275,
++        "lng": 76.88055
++      },
++      {
++        "lat": 10.97078,
++        "lng": 76.8956
++      },
++      {
++        "lat": 10.982285,
++        "lng": 76.91064999999999
++      },
++      {
++        "lat": 10.99379,
++        "lng": 76.92569999999999
++      },
++      {
++        "lat": 11.005295,
++        "lng": 76.94075
++      },
++      {
++        "lat": 11.0168,
++        "lng": 76.9558
++      }
++    ],
++    "distance": 41.65080790828845,
++    "duration": 83.3016158165769,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.552Z"
++  },
++  "parents-meet": {
++    "id": "parents-meet",
++    "from": {
++      "lat": 11.0168,
++      "lng": 76.9558,
++      "name": "Coimbatore"
++    },
++    "to": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 11.0168,
++        "lng": 76.9558
++      },
++      {
++        "lat": 11.005295,
++        "lng": 76.94075
++      },
++      {
++        "lat": 10.99379,
++        "lng": 76.92569999999999
++      },
++      {
++        "lat": 10.982285,
++        "lng": 76.91064999999999
++      },
++      {
++        "lat": 10.97078,
++        "lng": 76.8956
++      },
++      {
++        "lat": 10.959275,
++        "lng": 76.88055
++      },
++      {
++        "lat": 10.94777,
++        "lng": 76.8655
++      },
++      {
++        "lat": 10.936265,
++        "lng": 76.85045
++      },
++      {
++        "lat": 10.92476,
++        "lng": 76.83539999999999
++      },
++      {
++        "lat": 10.913255,
++        "lng": 76.82034999999999
++      },
++      {
++        "lat": 10.90175,
++        "lng": 76.80529999999999
++      },
++      {
++        "lat": 10.890245,
++        "lng": 76.79025
++      },
++      {
++        "lat": 10.87874,
++        "lng": 76.7752
++      },
++      {
++        "lat": 10.867234999999999,
++        "lng": 76.76015
++      },
++      {
++        "lat": 10.85573,
++        "lng": 76.7451
++      },
++      {
++        "lat": 10.844225,
++        "lng": 76.73004999999999
++      },
++      {
++        "lat": 10.83272,
++        "lng": 76.71499999999999
++      },
++      {
++        "lat": 10.821215,
++        "lng": 76.69995
++      },
++      {
++        "lat": 10.809709999999999,
++        "lng": 76.6849
++      },
++      {
++        "lat": 10.798205,
++        "lng": 76.66985
++      },
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      }
++    ],
++    "distance": 41.65080790828845,
++    "duration": 83.3016158165769,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.553Z"
++  },
++  "early-childhood-palakkad": {
++    "id": "early-childhood-palakkad",
++    "from": {
++      "lat": 10.5276,
++      "lng": 76.2144,
++      "name": "Thrissur"
++    },
++    "to": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 10.5276,
++        "lng": 76.2144
++      },
++      {
++        "lat": 10.540555,
++        "lng": 76.23642
++      },
++      {
++        "lat": 10.55351,
++        "lng": 76.25844
++      },
++      {
++        "lat": 10.566464999999999,
++        "lng": 76.28045999999999
++      },
++      {
++        "lat": 10.579419999999999,
++        "lng": 76.30248
++      },
++      {
++        "lat": 10.592375,
++        "lng": 76.3245
++      },
++      {
++        "lat": 10.60533,
++        "lng": 76.34652
++      },
++      {
++        "lat": 10.618285,
++        "lng": 76.36854
++      },
++      {
++        "lat": 10.63124,
++        "lng": 76.39056
++      },
++      {
++        "lat": 10.644195,
++        "lng": 76.41257999999999
++      },
++      {
++        "lat": 10.65715,
++        "lng": 76.43459999999999
++      },
++      {
++        "lat": 10.670105,
++        "lng": 76.45662
++      },
++      {
++        "lat": 10.68306,
++        "lng": 76.47864
++      },
++      {
++        "lat": 10.696015,
++        "lng": 76.50066
++      },
++      {
++        "lat": 10.708969999999999,
++        "lng": 76.52268
++      },
++      {
++        "lat": 10.721924999999999,
++        "lng": 76.54469999999999
++      },
++      {
++        "lat": 10.73488,
++        "lng": 76.56671999999999
++      },
++      {
++        "lat": 10.747835,
++        "lng": 76.58874
++      },
++      {
++        "lat": 10.76079,
++        "lng": 76.61076
++      },
++      {
++        "lat": 10.773745,
++        "lng": 76.63278
++      },
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      }
++    ],
++    "distance": 56.09026060616755,
++    "duration": 112.1805212123351,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.554Z"
++  },
++  "lawrence-ooty": {
++    "id": "lawrence-ooty",
++    "from": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "to": {
++      "lat": 11.4102,
++      "lng": 76.695,
++      "name": "Ooty"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      },
++      {
++        "lat": 10.817874999999999,
++        "lng": 76.65681
++      },
++      {
++        "lat": 10.84905,
++        "lng": 76.65881999999999
++      },
++      {
++        "lat": 10.880225,
++        "lng": 76.66082999999999
++      },
++      {
++        "lat": 10.9114,
++        "lng": 76.66283999999999
++      },
++      {
++        "lat": 10.942575,
++        "lng": 76.66485
++      },
++      {
++        "lat": 10.973749999999999,
++        "lng": 76.66686
++      },
++      {
++        "lat": 11.004925,
++        "lng": 76.66887
++      },
++      {
++        "lat": 11.0361,
++        "lng": 76.67088
++      },
++      {
++        "lat": 11.067275,
++        "lng": 76.67289
++      },
++      {
++        "lat": 11.09845,
++        "lng": 76.6749
++      },
++      {
++        "lat": 11.129624999999999,
++        "lng": 76.67690999999999
++      },
++      {
++        "lat": 11.1608,
++        "lng": 76.67891999999999
++      },
++      {
++        "lat": 11.191975,
++        "lng": 76.68092999999999
++      },
++      {
++        "lat": 11.22315,
++        "lng": 76.68293999999999
++      },
++      {
++        "lat": 11.254325,
++        "lng": 76.68494999999999
++      },
++      {
++        "lat": 11.285499999999999,
++        "lng": 76.68696
++      },
++      {
++        "lat": 11.316675,
++        "lng": 76.68897
++      },
++      {
++        "lat": 11.34785,
++        "lng": 76.69098
++      },
++      {
++        "lat": 11.379025,
++        "lng": 76.69299
++      },
++      {
++        "lat": 11.4102,
++        "lng": 76.695
++      }
++    ],
++    "distance": 69.46865922183662,
++    "duration": 138.93731844367323,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.554Z"
++  },
++  "lions-school-palakkad": {
++    "id": "lions-school-palakkad",
++    "from": {
++      "lat": -6.7924,
++      "lng": 39.2083,
++      "name": "Dar es Salaam"
++    },
++    "to": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": -6.7924,
++        "lng": 39.2083
++      },
++      {
++        "lat": -5.913444999999999,
++        "lng": 41.080625
++      },
++      {
++        "lat": -5.03449,
++        "lng": 42.95295
++      },
++      {
++        "lat": -4.155535,
++        "lng": 44.825275
++      },
++      {
++        "lat": -3.2765799999999996,
++        "lng": 46.6976
++      },
++      {
++        "lat": -2.3976249999999997,
++        "lng": 48.569925
++      },
++      {
++        "lat": -1.5186700000000002,
++        "lng": 50.44225
++      },
++      {
++        "lat": -0.6397149999999998,
++        "lng": 52.314575
++      },
++      {
++        "lat": 0.23924000000000056,
++        "lng": 54.1869
++      },
++      {
++        "lat": 1.118195000000001,
++        "lng": 56.059225
++      },
++      {
++        "lat": 1.9971500000000004,
++        "lng": 57.93155
++      },
++      {
++        "lat": 2.8761050000000017,
++        "lng": 59.803875
++      },
++      {
++        "lat": 3.7550599999999994,
++        "lng": 61.676199999999994
++      },
++      {
++        "lat": 4.634015000000001,
++        "lng": 63.548525
++      },
++      {
++        "lat": 5.51297,
++        "lng": 65.42085
++      },
++      {
++        "lat": 6.391925000000001,
++        "lng": 67.29317499999999
++      },
++      {
++        "lat": 7.270880000000001,
++        "lng": 69.1655
++      },
++      {
++        "lat": 8.149835,
++        "lng": 71.037825
++      },
++      {
++        "lat": 9.02879,
++        "lng": 72.91014999999999
++      },
++      {
++        "lat": 9.907744999999998,
++        "lng": 74.78247499999999
++      },
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      }
++    ],
++    "distance": 4582.492636558486,
++    "duration": 9164.985273116972,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.554Z"
++  },
++  "mirs-sriperumbudur": {
++    "id": "mirs-sriperumbudur",
++    "from": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "to": {
++      "lat": 12.9675,
++      "lng": 79.9415,
++      "name": "Sriperumbudur"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      },
++      {
++        "lat": 10.89574,
++        "lng": 76.81913499999999
++      },
++      {
++        "lat": 11.00478,
++        "lng": 76.98347
++      },
++      {
++        "lat": 11.11382,
++        "lng": 77.14780499999999
++      },
++      {
++        "lat": 11.222859999999999,
++        "lng": 77.31214
++      },
++      {
++        "lat": 11.3319,
++        "lng": 77.476475
++      },
++      {
++        "lat": 11.44094,
++        "lng": 77.64081
++      },
++      {
++        "lat": 11.54998,
++        "lng": 77.805145
++      },
++      {
++        "lat": 11.65902,
++        "lng": 77.96948
++      },
++      {
++        "lat": 11.76806,
++        "lng": 78.133815
++      },
++      {
++        "lat": 11.877099999999999,
++        "lng": 78.29814999999999
++      },
++      {
++        "lat": 11.986139999999999,
++        "lng": 78.462485
++      },
++      {
++        "lat": 12.09518,
++        "lng": 78.62682
++      },
++      {
++        "lat": 12.20422,
++        "lng": 78.791155
++      },
++      {
++        "lat": 12.31326,
++        "lng": 78.95549
++      },
++      {
++        "lat": 12.4223,
++        "lng": 79.119825
++      },
++      {
++        "lat": 12.53134,
++        "lng": 79.28416
++      },
++      {
++        "lat": 12.640379999999999,
++        "lng": 79.44849500000001
++      },
++      {
++        "lat": 12.749419999999999,
++        "lng": 79.61283
++      },
++      {
++        "lat": 12.85846,
++        "lng": 79.77716500000001
++      },
++      {
++        "lat": 12.9675,
++        "lng": 79.9415
++      }
++    ],
++    "distance": 432.0773819867329,
++    "duration": 864.1547639734658,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.554Z"
++  },
++  "nitt-trichy": {
++    "id": "nitt-trichy",
++    "from": {
++      "lat": 12.9675,
++      "lng": 79.9415,
++      "name": "Sriperumbudur"
++    },
++    "to": {
++      "lat": 10.7905,
++      "lng": 78.7047,
++      "name": "Tiruchirappalli"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 12.9675,
++        "lng": 79.9415
++      },
++      {
++        "lat": 12.858649999999999,
++        "lng": 79.87966
++      },
++      {
++        "lat": 12.749799999999999,
++        "lng": 79.81782000000001
++      },
++      {
++        "lat": 12.64095,
++        "lng": 79.75598000000001
++      },
++      {
++        "lat": 12.5321,
++        "lng": 79.69414
++      },
++      {
++        "lat": 12.42325,
++        "lng": 79.6323
++      },
++      {
++        "lat": 12.3144,
++        "lng": 79.57046
++      },
++      {
++        "lat": 12.205549999999999,
++        "lng": 79.50862000000001
++      },
++      {
++        "lat": 12.0967,
++        "lng": 79.44678
++      },
++      {
++        "lat": 11.98785,
++        "lng": 79.38494
++      },
++      {
++        "lat": 11.879,
++        "lng": 79.32310000000001
++      },
++      {
++        "lat": 11.77015,
++        "lng": 79.26126000000001
++      },
++      {
++        "lat": 11.661299999999999,
++        "lng": 79.19942
++      },
++      {
++        "lat": 11.55245,
++        "lng": 79.13758
++      },
++      {
++        "lat": 11.4436,
++        "lng": 79.07574
++      },
++      {
++        "lat": 11.33475,
++        "lng": 79.0139
++      },
++      {
++        "lat": 11.2259,
++        "lng": 78.95206
++      },
++      {
++        "lat": 11.117049999999999,
++        "lng": 78.89022
++      },
++      {
++        "lat": 11.0082,
++        "lng": 78.82838000000001
++      },
++      {
++        "lat": 10.89935,
++        "lng": 78.76654
++      },
++      {
++        "lat": 10.7905,
++        "lng": 78.7047
++      }
++    ],
++    "distance": 276.9621048652141,
++    "duration": 553.9242097304282,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.554Z"
++  },
++  "vajiram-delhi-2018": {
++    "id": "vajiram-delhi-2018",
++    "from": {
++      "lat": 10.7905,
++      "lng": 78.7047,
++      "name": "Tiruchirappalli"
++    },
++    "to": {
++      "lat": 28.6139,
++      "lng": 77.209,
++      "name": "New Delhi"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 10.7905,
++        "lng": 78.7047
++      },
++      {
++        "lat": 11.68167,
++        "lng": 78.629915
++      },
++      {
++        "lat": 12.57284,
++        "lng": 78.55513
++      },
++      {
++        "lat": 13.46401,
++        "lng": 78.480345
++      },
++      {
++        "lat": 14.35518,
++        "lng": 78.40556000000001
++      },
++      {
++        "lat": 15.24635,
++        "lng": 78.330775
++      },
++      {
++        "lat": 16.13752,
++        "lng": 78.25599
++      },
++      {
++        "lat": 17.028689999999997,
++        "lng": 78.181205
++      },
++      {
++        "lat": 17.91986,
++        "lng": 78.10642
++      },
++      {
++        "lat": 18.811030000000002,
++        "lng": 78.03163500000001
++      },
++      {
++        "lat": 19.702199999999998,
++        "lng": 77.95685
++      },
++      {
++        "lat": 20.59337,
++        "lng": 77.882065
++      },
++      {
++        "lat": 21.48454,
++        "lng": 77.80728
++      },
++      {
++        "lat": 22.375709999999998,
++        "lng": 77.732495
++      },
++      {
++        "lat": 23.26688,
++        "lng": 77.65771000000001
++      },
++      {
++        "lat": 24.15805,
++        "lng": 77.582925
++      },
++      {
++        "lat": 25.04922,
++        "lng": 77.50814
++      },
++      {
++        "lat": 25.94039,
++        "lng": 77.433355
++      },
++      {
++        "lat": 26.831560000000003,
++        "lng": 77.35857
++      },
++      {
++        "lat": 27.72273,
++        "lng": 77.28378500000001
++      },
++      {
++        "lat": 28.6139,
++        "lng": 77.209
++      }
++    ],
++    "distance": 1987.9781212874846,
++    "duration": 3975.956242574969,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.554Z"
++  },
++  "wfh-palakkad-2021": {
++    "id": "wfh-palakkad-2021",
++    "from": {
++      "lat": 12.9716,
++      "lng": 77.5946,
++      "name": "Bengaluru"
++    },
++    "to": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 12.9716,
++        "lng": 77.5946
++      },
++      {
++        "lat": 12.862355,
++        "lng": 77.54761
++      },
++      {
++        "lat": 12.75311,
++        "lng": 77.50062
++      },
++      {
++        "lat": 12.643865,
++        "lng": 77.45363
++      },
++      {
++        "lat": 12.53462,
++        "lng": 77.40664
++      },
++      {
++        "lat": 12.425375,
++        "lng": 77.35965
++      },
++      {
++        "lat": 12.316130000000001,
++        "lng": 77.31266
++      },
++      {
++        "lat": 12.206885,
++        "lng": 77.26567
++      },
++      {
++        "lat": 12.09764,
++        "lng": 77.21867999999999
++      },
++      {
++        "lat": 11.988395,
++        "lng": 77.17169
++      },
++      {
++        "lat": 11.87915,
++        "lng": 77.12469999999999
++      },
++      {
++        "lat": 11.769905,
++        "lng": 77.07771
++      },
++      {
++        "lat": 11.66066,
++        "lng": 77.03072
++      },
++      {
++        "lat": 11.551415,
++        "lng": 76.98373
++      },
++      {
++        "lat": 11.44217,
++        "lng": 76.93674
++      },
++      {
++        "lat": 11.332925,
++        "lng": 76.88974999999999
++      },
++      {
++        "lat": 11.22368,
++        "lng": 76.84276
++      },
++      {
++        "lat": 11.114435,
++        "lng": 76.79576999999999
++      },
++      {
++        "lat": 11.005189999999999,
++        "lng": 76.74878
++      },
++      {
++        "lat": 10.895945,
++        "lng": 76.70178999999999
++      },
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      }
++    ],
++    "distance": 263.59225620542327,
++    "duration": 527.1845124108465,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.555Z"
++  },
++  "return-campus-feb-2022": {
++    "id": "return-campus-feb-2022",
++    "from": {
++      "lat": 10.7867,
++      "lng": 76.6548,
++      "name": "Palakkad"
++    },
++    "to": {
++      "lat": 12.9716,
++      "lng": 77.5946,
++      "name": "Bengaluru"
++    },
++    "transportMode": "train",
++    "waypoints": [
++      {
++        "lat": 10.7867,
++        "lng": 76.6548
++      },
++      {
++        "lat": 10.895945,
++        "lng": 76.70178999999999
++      },
++      {
++        "lat": 11.005189999999999,
++        "lng": 76.74878
++      },
++      {
++        "lat": 11.114435,
++        "lng": 76.79576999999999
++      },
++      {
++        "lat": 11.22368,
++        "lng": 76.84276
++      },
++      {
++        "lat": 11.332925,
++        "lng": 76.88974999999999
++      },
++      {
++        "lat": 11.44217,
++        "lng": 76.93674
++      },
++      {
++        "lat": 11.551415,
++        "lng": 76.98373
++      },
++      {
++        "lat": 11.66066,
++        "lng": 77.03072
++      },
++      {
++        "lat": 11.769905,
++        "lng": 77.07771
++      },
++      {
++        "lat": 11.87915,
++        "lng": 77.12469999999999
++      },
++      {
++        "lat": 11.988395,
++        "lng": 77.17169
++      },
++      {
++        "lat": 12.09764,
++        "lng": 77.21867999999999
++      },
++      {
++        "lat": 12.206885,
++        "lng": 77.26567
++      },
++      {
++        "lat": 12.316130000000001,
++        "lng": 77.31266
++      },
++      {
++        "lat": 12.425375,
++        "lng": 77.35965
++      },
++      {
++        "lat": 12.53462,
++        "lng": 77.40664
++      },
++      {
++        "lat": 12.643865,
++        "lng": 77.45363
++      },
++      {
++        "lat": 12.75311,
++        "lng": 77.50062
++      },
++      {
++        "lat": 12.862355,
++        "lng": 77.54761
++      },
++      {
++        "lat": 12.9716,
++        "lng": 77.5946
++      }
++    ],
++    "distance": 263.59225620542327,
++    "duration": 527.1845124108465,
++    "generatedBy": "simple-interpolation",
++    "generatedAt": "2026-02-27T17:26:10.555Z"
++  }
++}
+\ No newline at end of file
+-- 
+2.43.0
+
+
+From 1c20517c50de594d8822b216f8bb510b16710393 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Feb 2026 17:30:41 +0000
+Subject: [PATCH 2/3] feat(journey): create Cesium journey experience with
+ camera choreography
+
+- Implement CesiumJourneyExperience component with full state management
+- Port journey timeline logic to Cesium entities and camera controls
+- Add cinematic camera transitions:
+  - Globe view (5M altitude) when dwelling at events
+  - Low altitude follow-cam (500-700m) for ground travel (train/hike)
+  - Arc camera (2-3M altitude) for flights
+  - Smooth bearing calculation for directional camera
+- Render journey visualization:
+  - Completed flight arcs (translucent blue)
+  - Active flight arcs (growing with travel progress)
+  - Ground routes (terrain-hugging paths with animated entity)
+  - Event markers (color-coded by status)
+- Add UI overlays:
+  - Event card showing current location/summary
+  - Travel progress indicator
+  - Bottom progress bar
+  - Debug info panel
+- Support wheel scroll and auto-play
+- Create test route at /journey-cesium
+
+Next: Test the visualization and refine camera movements
+---
+ src/app/journey-cesium/page.tsx               |  26 ++
+ .../journey/CesiumJourneyExperience.tsx       | 414 ++++++++++++++++++
+ 2 files changed, 440 insertions(+)
+ create mode 100644 src/app/journey-cesium/page.tsx
+ create mode 100644 src/components/journey/CesiumJourneyExperience.tsx
+
+diff --git a/src/app/journey-cesium/page.tsx b/src/app/journey-cesium/page.tsx
+new file mode 100644
+index 0000000..185d748
+--- /dev/null
++++ b/src/app/journey-cesium/page.tsx
+@@ -0,0 +1,26 @@
++import type { Metadata } from 'next';
++import { Suspense } from 'react';
++import dynamic from 'next/dynamic';
++import journeyEvents from '@/data/journeyEvents.json';
++
++const CesiumJourneyExperience = dynamic(
++  () => import('@/components/journey/CesiumJourneyExperience'),
++  { ssr: false }
++);
++
++export const metadata: Metadata = {
++  title: 'Journey (Cesium) | Aditya Arpitha',
++  description: '3D globe-to-terrain journey visualization with Cesium.',
++};
++
++export default function JourneyCesiumPage() {
++  return (
++    <div className="h-screen w-screen">
++      <Suspense fallback={<div className="h-full w-full bg-slate-950 flex items-center justify-center">
++        <div className="text-slate-400 animate-pulse">Loading 3D Globe...</div>
++      </div>}>
++        <CesiumJourneyExperience events={journeyEvents} />
++      </Suspense>
++    </div>
++  );
++}
+diff --git a/src/components/journey/CesiumJourneyExperience.tsx b/src/components/journey/CesiumJourneyExperience.tsx
+new file mode 100644
+index 0000000..04fd65a
+--- /dev/null
++++ b/src/components/journey/CesiumJourneyExperience.tsx
+@@ -0,0 +1,414 @@
++'use client';
++
++import { useEffect, useRef, useState, useCallback } from 'react';
++import { Viewer, Entity, PolylineGraphics, PointGraphics, CameraFlyTo, Billboard } from 'resium';
++import * as Cesium from 'cesium';
++import {
++  Cartesian3,
++  Color,
++  Ion,
++  Viewer as CesiumViewer,
++  Math as CesiumMath,
++  HeadingPitchRange,
++  ScreenSpaceEventHandler,
++  ScreenSpaceEventType,
++  defined,
++  JulianDate,
++  SampledPositionProperty,
++  Cartographic,
++  Ellipsoid,
++  ArcType,
++} from 'cesium';
++import { buildJourneyTimeline, getJourneyState, getTransportColor, type JourneyEvent } from '@/lib/journey';
++
++// Load route data
++import journeyRoutes from '@/data/journeyRoutes.json';
++
++// Set Cesium Ion token if available
++if (typeof window !== 'undefined') {
++  const cesiumToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
++  if (cesiumToken && cesiumToken !== 'your_cesium_ion_token_here') {
++    Ion.defaultAccessToken = cesiumToken;
++  }
++}
++
++interface CesiumJourneyExperienceProps {
++  events: JourneyEvent[];
++}
++
++const WHEEL_SENSITIVITY = 0.0006;
++const AUTOPLAY_SPEED = 0.004;
++const IDLE_AUTOPLAY_MS = 10_000;
++
++export default function CesiumJourneyExperience({ events }: CesiumJourneyExperienceProps) {
++  const viewerRef = useRef<CesiumViewer | null>(null);
++  const [progress, setProgress] = useState(0);
++  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
++  const [lastInteraction, setLastInteraction] = useState(Date.now());
++  const animationFrameRef = useRef<number>();
++  const lastUpdateRef = useRef(Date.now());
++
++  // Build timeline
++  const timeline = buildJourneyTimeline(events);
++  const state = getJourneyState(timeline, progress);
++
++  // Camera state
++  const [cameraAltitude, setCameraAltitude] = useState(15000000); // Start at 15M meters
++  const [cameraPitch, setCameraPitch] = useState(-90); // Looking down
++  const [cameraHeading, setCameraHeading] = useState(0);
++
++  // Initialize viewer
++  useEffect(() => {
++    if (!viewerRef.current) return;
++
++    const viewer = viewerRef.current;
++
++    // Hide default UI
++    viewer.animation.container.style.display = 'none';
++    viewer.timeline.container.style.display = 'none';
++    viewer.fullscreenButton.container.style.display = 'none';
++    viewer.vrButton.container.style.display = 'none';
++    viewer.geocoder.container.style.display = 'none';
++    viewer.homeButton.container.style.display = 'none';
++    viewer.sceneModePicker.container.style.display = 'none';
++    viewer.baseLayerPicker.container.style.display = 'none';
++    viewer.navigationHelpButton.container.style.display = 'none';
++    viewer.selectionIndicator.container.style.display = 'none';
++
++    // Configure globe
++    viewer.scene.globe.enableLighting = true;
++    viewer.scene.globe.atmosphereLightIntensity = 3.0;
++    viewer.scene.globe.atmosphereBrightnessShift = 0.4;
++    viewer.scene.globe.baseColor = Color.fromCssColorString('#030712');
++
++    // Enable terrain if token is available
++    const cesiumToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
++    if (cesiumToken && cesiumToken !== 'your_cesium_ion_token_here') {
++      import('cesium').then((Cesium) => {
++        viewer.terrainProvider = Cesium.createWorldTerrain({
++          requestWaterMask: true,
++          requestVertexNormals: true,
++        });
++      });
++    }
++
++    // Wheel scroll handler
++    const handler = new ScreenSpaceEventHandler(viewer.canvas);
++    handler.setInputAction((event: any) => {
++      const delta = event;
++      setProgress((prev) => Math.max(0, Math.min(1, prev + delta * WHEEL_SENSITIVITY)));
++      setLastInteraction(Date.now());
++      setIsAutoPlaying(false);
++    }, ScreenSpaceEventType.WHEEL);
++
++    return () => {
++      handler.destroy();
++    };
++  }, []);
++
++  // Auto-play logic
++  useEffect(() => {
++    const checkIdle = setInterval(() => {
++      if (Date.now() - lastInteraction > IDLE_AUTOPLAY_MS && !isAutoPlaying && progress < 0.99) {
++        setIsAutoPlaying(true);
++      }
++    }, 1000);
++
++    return () => clearInterval(checkIdle);
++  }, [lastInteraction, isAutoPlaying, progress]);
++
++  // Animation loop
++  useEffect(() => {
++    const animate = () => {
++      const now = Date.now();
++      const dt = (now - lastUpdateRef.current) / 1000; // seconds
++      lastUpdateRef.current = now;
++
++      if (isAutoPlaying) {
++        setProgress((prev) => {
++          const next = prev + AUTOPLAY_SPEED * dt;
++          if (next >= 1) {
++            setIsAutoPlaying(false);
++            return 1;
++          }
++          return next;
++        });
++      }
++
++      animationFrameRef.current = requestAnimationFrame(animate);
++    };
++
++    animationFrameRef.current = requestAnimationFrame(animate);
++
++    return () => {
++      if (animationFrameRef.current) {
++        cancelAnimationFrame(animationFrameRef.current);
++      }
++    };
++  }, [isAutoPlaying]);
++
++  // Camera choreography based on journey state
++  useEffect(() => {
++    if (!state || !viewerRef.current) return;
++
++    const viewer = viewerRef.current;
++    const { traveling, travelProgress, fromEvent, toEvent, lat, lng } = state;
++
++    if (traveling && fromEvent.transportFromPrevious !== 'flight') {
++      // Ground travel - swoop down to low altitude
++      const cruiseAltitude = 500 + Math.sin(Math.PI * travelProgress) * 200; // 500-700m
++      const pitch = -60; // Tilted view
++      const heading = calculateBearing(fromEvent.lng, fromEvent.lat, toEvent.lng, toEvent.lat);
++
++      setCameraAltitude(cruiseAltitude);
++      setCameraPitch(pitch);
++      setCameraHeading(heading);
++
++      // Smooth camera follow
++      const cameraPos = Cartesian3.fromDegrees(lng, lat, cruiseAltitude);
++      viewer.camera.flyTo({
++        destination: cameraPos,
++        orientation: {
++          heading: CesiumMath.toRadians(heading),
++          pitch: CesiumMath.toRadians(pitch),
++          roll: 0,
++        },
++        duration: 0.5,
++      });
++    } else if (traveling && fromEvent.transportFromPrevious === 'flight') {
++      // Flight travel - arc camera
++      const arcAltitude = 2000000 + Math.sin(Math.PI * travelProgress) * 1000000; // 2-3M meters
++      setCameraAltitude(arcAltitude);
++      setCameraPitch(-75);
++
++      const cameraPos = Cartesian3.fromDegrees(lng, lat, arcAltitude);
++      viewer.camera.flyTo({
++        destination: cameraPos,
++        orientation: {
++          heading: 0,
++          pitch: CesiumMath.toRadians(-75),
++          roll: 0,
++        },
++        duration: 0.5,
++      });
++    } else {
++      // Dwelling - globe view
++      const dwellAltitude = 5000000; // 5M meters
++      setCameraAltitude(dwellAltitude);
++      setCameraPitch(-90);
++
++      const cameraPos = Cartesian3.fromDegrees(state.activeEvent.lng, state.activeEvent.lat, dwellAltitude);
++      viewer.camera.flyTo({
++        destination: cameraPos,
++        orientation: {
++          heading: 0,
++          pitch: CesiumMath.toRadians(-90),
++          roll: 0,
++        },
++        duration: 1.5,
++      });
++    }
++  }, [state?.traveling, state?.travelProgress, state?.lat, state?.lng]);
++
++  if (!state) {
++    return <div className="w-full h-full bg-slate-950 flex items-center justify-center">
++      <div className="text-slate-400">Loading journey...</div>
++    </div>;
++  }
++
++  // Generate completed flight arcs
++  const completedArcs = [];
++  for (let i = 1; i <= state.completedTransitions + 1; i++) {
++    const event = timeline.events[i];
++    const prevEvent = timeline.events[i - 1];
++
++    if (event && prevEvent && event.transportFromPrevious === 'flight') {
++      const start = Cartesian3.fromDegrees(prevEvent.lng, prevEvent.lat, 0);
++      const end = Cartesian3.fromDegrees(event.lng, event.lat, 0);
++      const color = Color.fromCssColorString(getTransportColor('flight')).withAlpha(0.4);
++
++      completedArcs.push({
++        id: `arc-${event.id}`,
++        positions: [start, end],
++        color,
++      });
++    }
++  }
++
++  // Active traveling path
++  let activePath = null;
++  if (state.traveling && state.fromEvent.id !== state.toEvent.id) {
++    const route = (journeyRoutes as any)[state.toEvent.id];
++
++    if (route && state.toEvent.transportFromPrevious !== 'flight') {
++      // Ground route
++      const waypoints = route.waypoints || [];
++      const positions = waypoints.map((wp: { lat: number; lng: number }) =>
++        Cartesian3.fromDegrees(wp.lng, wp.lat, 0)
++      );
++
++      // Calculate entity position along route
++      const totalWaypoints = positions.length - 1;
++      const currentIndex = Math.floor(state.travelProgress * totalWaypoints);
++      const nextIndex = Math.min(currentIndex + 1, totalWaypoints);
++      const segmentProgress = (state.travelProgress * totalWaypoints) % 1;
++
++      const entityPosition = Cartesian3.lerp(
++        positions[currentIndex],
++        positions[nextIndex],
++        segmentProgress,
++        new Cartesian3()
++      );
++
++      const color = Color.fromCssColorString(getTransportColor(state.toEvent.transportFromPrevious));
++
++      activePath = {
++        id: `active-route-${state.toEvent.id}`,
++        positions,
++        entityPosition,
++        color,
++        transportMode: state.toEvent.transportFromPrevious,
++      };
++    } else if (state.toEvent.transportFromPrevious === 'flight') {
++      // Active flight arc
++      const start = Cartesian3.fromDegrees(state.fromEvent.lng, state.fromEvent.lat, 0);
++      const end = Cartesian3.fromDegrees(state.toEvent.lng, state.toEvent.lat, 0);
++
++      // Growing arc based on progress
++      const arcPosition = Cartesian3.lerp(start, end, state.travelProgress, new Cartesian3());
++      const color = Color.fromCssColorString(getTransportColor('flight'));
++
++      activePath = {
++        id: `active-arc-${state.toEvent.id}`,
++        positions: [start, arcPosition],
++        entityPosition: arcPosition,
++        color,
++        transportMode: 'flight',
++      };
++    }
++  }
++
++  return (
++    <div className="relative w-full h-full">
++      <Viewer
++        ref={viewerRef}
++        full
++        timeline={false}
++        animation={false}
++        baseLayerPicker={false}
++        fullscreenButton={false}
++        vrButton={false}
++        geocoder={false}
++        homeButton={false}
++        infoBox={false}
++        sceneModePicker={false}
++        selectionIndicator={false}
++        navigationHelpButton={false}
++        navigationInstructionsInitiallyVisible={false}
++      >
++        {/* Completed flight arcs */}
++        {completedArcs.map((arc) => (
++          <Entity key={arc.id}>
++            <PolylineGraphics
++              positions={arc.positions}
++              width={2}
++              material={arc.color}
++              arcType={ArcType.GEODESIC}
++            />
++          </Entity>
++        ))}
++
++        {/* Active traveling path */}
++        {activePath && (
++          <>
++            {/* Path line */}
++            <Entity key={activePath.id}>
++              <PolylineGraphics
++                positions={activePath.positions}
++                width={activePath.transportMode === 'flight' ? 3 : 5}
++                material={activePath.color.withAlpha(0.8)}
++                arcType={activePath.transportMode === 'flight' ? ArcType.GEODESIC : ArcType.NONE}
++                clampToGround={activePath.transportMode !== 'flight'}
++              />
++            </Entity>
++
++            {/* Moving entity */}
++            <Entity key={`${activePath.id}-entity`} position={activePath.entityPosition}>
++              <PointGraphics
++                pixelSize={activePath.transportMode === 'flight' ? 10 : 14}
++                color={activePath.color}
++                outlineColor={Color.WHITE}
++                outlineWidth={2}
++              />
++            </Entity>
++          </>
++        )}
++
++        {/* Event markers */}
++        {timeline.events.map((event, idx) => (
++          <Entity
++            key={event.id}
++            position={Cartesian3.fromDegrees(event.lng, event.lat, 0)}
++          >
++            <PointGraphics
++              pixelSize={idx === state.activeEventIndex ? 12 : 7}
++              color={
++                idx === state.activeEventIndex
++                  ? Color.YELLOW
++                  : idx < state.activeEventIndex
++                  ? Color.LIGHTBLUE.withAlpha(0.7)
++                  : Color.GRAY.withAlpha(0.5)
++              }
++              outlineColor={Color.WHITE}
++              outlineWidth={idx === state.activeEventIndex ? 2 : 1}
++            />
++          </Entity>
++        ))}
++      </Viewer>
++
++      {/* UI Overlay */}
++      <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-sm p-4 rounded-lg max-w-md">
++        <h3 className="text-white font-semibold text-lg">{state.activeEvent.title}</h3>
++        <p className="text-slate-300 text-sm mt-1">{state.activeEvent.locationName}, {state.activeEvent.country}</p>
++        <p className="text-slate-400 text-xs mt-2">{state.activeEvent.summary}</p>
++        {state.traveling && (
++          <div className="mt-3 text-xs text-amber-400">
++            {state.toEvent.transportFromPrevious === 'train' && '🚂 Train'}
++            {state.toEvent.transportFromPrevious === 'flight' && '✈️ Flight'}
++            {state.toEvent.transportFromPrevious === 'hike' && '🥾 Hiking'}
++            {' → '}{state.toEvent.locationName} ({Math.round(state.travelProgress * 100)}%)
++          </div>
++        )}
++      </div>
++
++      {/* Progress bar */}
++      <div className="absolute bottom-0 left-0 right-0 h-2 bg-slate-900/50">
++        <div
++          className="h-full bg-sky-500 transition-all duration-100"
++          style={{ width: `${progress * 100}%` }}
++        />
++      </div>
++
++      {/* Debug info */}
++      <div className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 font-mono">
++        <div>Progress: {(progress * 100).toFixed(1)}%</div>
++        <div>Altitude: {(cameraAltitude / 1000).toFixed(0)} km</div>
++        <div>Mode: {state.traveling ? 'Traveling' : 'Dwelling'}</div>
++        {isAutoPlaying && <div className="text-amber-400">▶ Auto-playing</div>}
++      </div>
++    </div>
++  );
++}
++
++// Helper: Calculate bearing between two coordinates
++function calculateBearing(lng1: number, lat1: number, lng2: number, lat2: number): number {
++  const φ1 = lat1 * (Math.PI / 180);
++  const φ2 = lat2 * (Math.PI / 180);
++  const Δλ = (lng2 - lng1) * (Math.PI / 180);
++
++  const y = Math.sin(Δλ) * Math.cos(φ2);
++  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
++  const θ = Math.atan2(y, x);
++
++  return ((θ * (180 / Math.PI)) + 360) % 360;
++}
+-- 
+2.43.0
+
+
+From cba3f3ac50c279f2d46702eb4ac20ae77e218829 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Feb 2026 17:34:30 +0000
+Subject: [PATCH 3/3] chore: ignore Cesium build artifacts in public/cesium/
+
+---
+ .gitignore | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+index dfb05a4..e0be8d6 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -47,3 +47,6 @@ CLAUDE.md
+ 
+ # Claude Code
+ .claude/
++
++# Cesium static assets (copied by webpack)
++/public/cesium/
+-- 
+2.43.0
+
