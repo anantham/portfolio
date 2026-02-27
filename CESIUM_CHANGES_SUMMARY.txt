@@ -1,0 +1,45 @@
+CESIUM INTEGRATION - ALL CHANGES
+================================
+
+This file lists all changes made for the Cesium.js integration.
+Apply these changes on your Mac to get the full Cesium experience.
+
+=== NEW FILES ===
+
+1. ROUTE_DATA_REQUIREMENTS.md
+2. scripts/generate-journey-routes.mjs  
+3. src/components/journey/CesiumViewer.tsx
+4. src/components/journey/CesiumViewerClient.tsx
+5. src/components/journey/CesiumJourneyExperience.tsx
+6. src/app/journey-cesium/page.tsx
+7. src/data/journeyRoutes.json
+
+=== MODIFIED FILES ===
+
+1. .env.example - Added Mapbox and Cesium tokens
+2. .gitignore - Added /public/cesium/
+3. next.config.js - Added Cesium webpack config
+4. package.json - Added cesium, resium dependencies + generate:routes script
+
+=== INSTALLATION STEPS ===
+
+On your Mac:
+
+1. Install dependencies:
+   npm install cesium resium copy-webpack-plugin
+
+2. Copy all the new files from this cloud environment
+
+3. Apply modifications to existing files
+
+4. Commit and push:
+   git add -A
+   git commit -m "feat: Cesium.js 3D journey visualization"
+   git push origin claude/redesign-interactive-website-01EajJQZujpgHpeiUx8jrMm5
+
+=== FILES TO DOWNLOAD ===
+
+Download from cloud environment:
+- cesium-integration.bundle (easiest - preserves history)
+- cesium-integration.patch (alternative)
+
