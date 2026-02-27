@@ -11,16 +11,19 @@
     "test:watch": "vitest",
     "lint": "next lint",
     "setup": "cp .env.example .env.local && echo 'Environment file created! Edit .env.local with your details, then run npm run dev'",
-    "enrich:journey-media": "node scripts/enrich-journey-media.mjs --tag ticket-derived"
+    "enrich:journey-media": "node scripts/enrich-journey-media.mjs --tag ticket-derived",
+    "generate:routes": "node scripts/generate-journey-routes.mjs"
   },
   "dependencies": {
     "autoprefixer": "^10.4.21",
+    "cesium": "^1.138.0",
     "framer-motion": "^11.3.28",
     "lucide-react": "^0.436.0",
     "next": "^14.2.32",
     "react": "^18",
     "react-dom": "^18",
-    "react-globe.gl": "^2.37.0"
+    "react-globe.gl": "^2.37.0",
+    "resium": "^1.19.4"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
@@ -28,6 +31,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "copy-webpack-plugin": "^13.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.7",
     "jsdom": "^28.1.0",
