@@ -47,3 +47,6 @@ CLAUDE.md
 
 # Claude Code
 .claude/
+
+# Cesium static assets (copied by webpack)
+/public/cesium/
