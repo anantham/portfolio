@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import content from '@/data/content.json'
+import { CARD_PREVIEW_HOVER_DELAY_MS, CARD_PREVIEW_LEAVE_DELAY_MS } from '@/lib/cardPreviewTiming'
 
 interface Project {
   id: string
@@ -34,50 +35,55 @@ const projects: Project[] = [
     id: 'mapping-tpot',
     title: 'Mapping TPOT',
     description: 'Research mapping the topology and dynamics of Twitter post-rationalist communities.',
-    image: '/images/lexicon.png',
+    image: '/images/projects/mapping-tpot-thumb.png',
     href: 'https://github.com/anantham/map-tpot'
   }
 ]
 
-function ProjectCard({ project }: { project: Project }) {
-  const [isHovered, setIsHovered] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+function ProjectCard({
+  project,
+  isFeatured,
+  onFeatureStart,
+  onFeatureEnd
+}: {
+  project: Project
+  isFeatured: boolean
+  onFeatureStart: () => void
+  onFeatureEnd: () => void
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
-
-  const handleHoverStart = useCallback(() => {
-    timerRef.current = setTimeout(() => setIsHovered(true), 350)
-  }, [])
-
-  const handleHoverEnd = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    setIsHovered(false)
-  }, [])
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    if (isHovered) {
+    if (isFeatured) {
       video.currentTime = 0
       video.play().catch(() => {/* autoplay blocked — image fallback stays visible */})
     } else {
       video.pause()
+      video.currentTime = 0
     }
-  }, [isHovered])
+  }, [isFeatured])
 
   return (
     <motion.a
       href={project.href}
       target="_blank"
       rel="noopener noreferrer"
-      onHoverStart={handleHoverStart}
-      onHoverEnd={handleHoverEnd}
+      data-project-card="true"
+      onMouseEnter={onFeatureStart}
+      onMouseLeave={onFeatureEnd}
+      onFocus={onFeatureStart}
+      onBlur={onFeatureEnd}
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
+      animate={{ aspectRatio: isFeatured ? 16 / 7 : 4 / 3 }}
+      transition={{
+        duration: 0.6,
+        aspectRatio: { duration: 0.75, ease: [0.4, 0, 0.2, 1] }
+      }}
       viewport={{ once: true }}
-      className="relative block rounded-2xl overflow-hidden aspect-[4/3] bg-zen-900 group"
+      className="relative block rounded-2xl overflow-hidden bg-zen-900 group"
     >
       {/* Static thumbnail */}
       <Image
@@ -85,7 +91,7 @@ function ProjectCard({ project }: { project: Project }) {
         alt={project.title}
         fill
         className="object-cover"
-        sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+        sizes={isFeatured ? '(min-width: 1024px) 80vw, 100vw' : '(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw'}
       />
 
       {/* Hover video (fades in over thumbnail) */}
@@ -96,7 +102,7 @@ function ProjectCard({ project }: { project: Project }) {
           loop
           playsInline
           preload="none"
-          animate={{ opacity: isHovered ? 1 : 0 }}
+          animate={{ opacity: isFeatured ? 1 : 0 }}
           transition={{ duration: 0.5 }}
           className="absolute inset-0 w-full h-full object-cover"
         >
@@ -116,7 +122,7 @@ function ProjectCard({ project }: { project: Project }) {
 
         {/* Description — slides up on dwell hover */}
         <AnimatePresence>
-          {isHovered && (
+          {isFeatured && (
             <motion.p
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -134,8 +140,72 @@ function ProjectCard({ project }: { project: Project }) {
 }
 
 export default function ProjectsShowcase() {
+  const [featuredProjectId, setFeaturedProjectId] = useState<string | null>(null)
+  const sectionRef = useRef<HTMLElement | null>(null)
+  const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearFeaturedProject = useCallback(() => {
+    if (enterTimerRef.current) { clearTimeout(enterTimerRef.current); enterTimerRef.current = null }
+    if (leaveTimerRef.current) { clearTimeout(leaveTimerRef.current); leaveTimerRef.current = null }
+    setFeaturedProjectId(null)
+  }, [])
+
+  const scheduleFeature = useCallback((id: string) => {
+    if (leaveTimerRef.current) { clearTimeout(leaveTimerRef.current); leaveTimerRef.current = null }
+    if (enterTimerRef.current) clearTimeout(enterTimerRef.current)
+    enterTimerRef.current = setTimeout(() => setFeaturedProjectId(id), CARD_PREVIEW_HOVER_DELAY_MS)
+  }, [])
+
+  const scheduleUnfeature = useCallback(() => {
+    if (enterTimerRef.current) { clearTimeout(enterTimerRef.current); enterTimerRef.current = null }
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+    leaveTimerRef.current = setTimeout(() => setFeaturedProjectId(null), CARD_PREVIEW_LEAVE_DELAY_MS)
+  }, [])
+
+  useEffect(() => () => {
+    if (enterTimerRef.current) clearTimeout(enterTimerRef.current)
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+  }, [])
+
+  const orderedProjects = useMemo(() => {
+    if (!featuredProjectId) return projects
+    const featured = projects.find(project => project.id === featuredProjectId)
+    if (!featured) return projects
+    return [featured, ...projects.filter(project => project.id !== featuredProjectId)]
+  }, [featuredProjectId])
+
+  useEffect(() => {
+    if (!featuredProjectId) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!sectionRef.current) return
+      const target = event.target as Node | null
+      if (!target) return
+      if (!sectionRef.current.contains(target)) {
+        clearFeaturedProject()
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') clearFeaturedProject()
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [featuredProjectId, clearFeaturedProject])
+
   return (
-    <section id="projects-section" className="py-20 px-4">
+    <section
+      ref={sectionRef}
+      id="projects-section"
+      className="py-20 px-4"
+      onMouseLeave={scheduleUnfeature}
+    >
       <div className="container mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -150,9 +220,25 @@ export default function ProjectsShowcase() {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map(project => (
-            <ProjectCard key={project.id} project={project} />
-          ))}
+          {orderedProjects.map(project => {
+            const isFeatured = featuredProjectId === project.id
+
+            return (
+              <motion.div
+                key={project.id}
+                layout
+                transition={{ layout: { type: 'spring', stiffness: 260, damping: 30 } }}
+                className={isFeatured ? 'md:col-span-2 lg:col-span-3' : ''}
+              >
+                <ProjectCard
+                  project={project}
+                  isFeatured={isFeatured}
+                  onFeatureStart={() => scheduleFeature(project.id)}
+                  onFeatureEnd={scheduleUnfeature}
+                />
+              </motion.div>
+            )
+          })}
         </div>
       </div>
     </section>
