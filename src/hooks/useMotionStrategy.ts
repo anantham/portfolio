@@ -29,11 +29,44 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
   const frameRef = useRef<number | null>(null)
   const lastTimestampRef = useRef<number | null>(null)
   const mouseRef = useRef<Position | null>(mousePosition ?? null)
+  const mouseVelocityRef = useRef<Position | null>(null)
+  const lastMouseSampleRef = useRef<{ x: number; y: number; t: number } | null>(null)
   // Track live position so new runners can start from current location
   const livePositionRef = useRef<Position>({ x: 0, y: 0 })
 
   useEffect(() => {
-    mouseRef.current = mousePosition ?? null
+    if (!mousePosition) {
+      mouseRef.current = null
+      mouseVelocityRef.current = null
+      lastMouseSampleRef.current = null
+      return
+    }
+
+    const now = performance.now()
+    const previous = lastMouseSampleRef.current
+    if (!previous) {
+      mouseVelocityRef.current = { x: 0, y: 0 }
+      lastMouseSampleRef.current = { x: mousePosition.x, y: mousePosition.y, t: now }
+      mouseRef.current = mousePosition
+      return
+    }
+
+    const dt = Math.max(0.001, (now - previous.t) / 1000)
+    const rawVx = (mousePosition.x - previous.x) / dt
+    const rawVy = (mousePosition.y - previous.y) / dt
+    const maxVelocity = 4000
+    const clampedVx = Math.max(-maxVelocity, Math.min(maxVelocity, rawVx))
+    const clampedVy = Math.max(-maxVelocity, Math.min(maxVelocity, rawVy))
+
+    const previousVelocity = mouseVelocityRef.current ?? { x: 0, y: 0 }
+    const smoothing = 0.35
+    mouseVelocityRef.current = {
+      x: previousVelocity.x + (clampedVx - previousVelocity.x) * smoothing,
+      y: previousVelocity.y + (clampedVy - previousVelocity.y) * smoothing,
+    }
+
+    lastMouseSampleRef.current = { x: mousePosition.x, y: mousePosition.y, t: now }
+    mouseRef.current = mousePosition
   }, [mousePosition])
 
   const factory = useMemo(() => getStrategyFactory(strategyType), [strategyType])
@@ -60,7 +93,8 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
       height: window.innerHeight,
       time: 0,
       deltaTime: 0,
-      mouse: mouseRef.current
+      mouse: mouseRef.current,
+      mouseVelocity: mouseVelocityRef.current,
     }
 
     runner.reset(startEnv)
@@ -103,7 +137,8 @@ export function useMotionStrategy<TConfig = Record<string, unknown>>({
         height: window.innerHeight,
         time: timeRef.current,
         deltaTime: delta,
-        mouse: mouseRef.current
+        mouse: mouseRef.current,
+        mouseVelocity: mouseVelocityRef.current,
       }
 
       const result = runnerRef.current.step(env)

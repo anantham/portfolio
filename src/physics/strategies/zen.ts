@@ -226,13 +226,23 @@ export const createZenStrategy: StrategyFactory<ZenConfig> = (config, options) =
     desiredVel.x += flowVec.x
     desiredVel.y += flowVec.y
 
-    // Mouse avoidance (gentle)
+    // Mouse avoidance (gentle, speed-aware):
+    // moving slowly near the wheel weakens repulsion so patient approaches can succeed.
+    // At speed=0 the avoidance fully dissolves — the wheel won't flee a still cursor.
     if (env.mouse) {
+      const mouseSpeed = env.mouseVelocity
+        ? Math.sqrt(env.mouseVelocity.x * env.mouseVelocity.x + env.mouseVelocity.y * env.mouseVelocity.y)
+        : 180
+      const calmThreshold = 300
+      const calmFactor = clamp(1 - mouseSpeed / calmThreshold, 0, 1)
+      const effectiveRadius = config.mouseAvoidanceRadius * (1 - calmFactor)
+      const effectiveStrength = config.mouseAvoidanceStrength * (1 - calmFactor)
+
       const dx = state.position.x - env.mouse.x
       const dy = state.position.y - env.mouse.y
       const distance = Math.sqrt(dx * dx + dy * dy)
-      if (distance > 0 && distance < config.mouseAvoidanceRadius) {
-        const strength = config.mouseAvoidanceStrength * (1 - distance / config.mouseAvoidanceRadius)
+      if (distance > 0 && distance < effectiveRadius) {
+        const strength = effectiveStrength * (1 - distance / effectiveRadius)
         desiredVel.x += (dx / distance) * strength
         desiredVel.y += (dy / distance) * strength
       }
@@ -256,7 +266,13 @@ export const createZenStrategy: StrategyFactory<ZenConfig> = (config, options) =
     state.position.y += state.velocity.y * dt
 
     if (env.mouse) {
-      const collisionRadius = config.mouseCollisionRadius ?? config.mouseAvoidanceRadius
+      const mouseSpeed = env.mouseVelocity
+        ? Math.sqrt(env.mouseVelocity.x * env.mouseVelocity.x + env.mouseVelocity.y * env.mouseVelocity.y)
+        : 180
+      const calmThreshold = 300
+      const calmFactor = clamp(1 - mouseSpeed / calmThreshold, 0, 1)
+      const baseCollisionRadius = config.mouseCollisionRadius ?? config.mouseAvoidanceRadius
+      const collisionRadius = baseCollisionRadius * (1 - calmFactor)
       const damping = config.mouseCollisionDamping ?? 0.6
       const dx = state.position.x - env.mouse.x
       const dy = state.position.y - env.mouse.y
@@ -273,25 +289,25 @@ export const createZenStrategy: StrategyFactory<ZenConfig> = (config, options) =
       }
     }
 
-    // fallback reflective boundaries
+    // Soft boundary fallback — only absorb when moving into the wall, never hard-bounce
     if (state.position.x < config.pad) {
       state.position.x = config.pad
-      state.velocity.x *= -0.8
+      if (state.velocity.x < 0) state.velocity.x *= -0.15
       state.heading = Math.atan2(state.velocity.y, state.velocity.x)
     }
     if (state.position.x > width - config.pad) {
       state.position.x = width - config.pad
-      state.velocity.x *= -0.8
+      if (state.velocity.x > 0) state.velocity.x *= -0.15
       state.heading = Math.atan2(state.velocity.y, state.velocity.x)
     }
     if (state.position.y < config.pad) {
       state.position.y = config.pad
-      state.velocity.y *= -0.8
+      if (state.velocity.y < 0) state.velocity.y *= -0.15
       state.heading = Math.atan2(state.velocity.y, state.velocity.x)
     }
     if (state.position.y > height - config.pad) {
       state.position.y = height - config.pad
-      state.velocity.y *= -0.8
+      if (state.velocity.y > 0) state.velocity.y *= -0.15
       state.heading = Math.atan2(state.velocity.y, state.velocity.x)
     }
 

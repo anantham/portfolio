@@ -14,6 +14,7 @@ export interface MotionEnvironment {
   time: number
   deltaTime: number
   mouse?: Position | null
+  mouseVelocity?: Velocity | null
 }
 
 export interface StrategyUpdateResult {
