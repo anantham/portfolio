@@ -12,6 +12,10 @@ import {
   MessageCircle
 } from 'lucide-react'
 import { siteConfig, hasLink } from '@/lib/config'
+import {
+  CARD_PREVIEW_HOVER_DELAY_MS,
+  CARD_PREVIEW_EXPAND_DURATION_S
+} from '@/lib/cardPreviewTiming'
 
 type SupportMethod = 'share' | 'thank' | 'donate' | 'book' | 'boost'
 
@@ -115,7 +119,7 @@ function SupportCard({
   const Icon = option.icon
 
   const handleHoverStart = () => {
-    timerRef.current = setTimeout(() => setIsHovered(true), 350)
+    timerRef.current = setTimeout(() => setIsHovered(true), CARD_PREVIEW_HOVER_DELAY_MS)
   }
 
   const handleHoverEnd = () => {
@@ -151,7 +155,7 @@ function SupportCard({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.5, ease: 'easeInOut' }}
+              transition={{ duration: CARD_PREVIEW_EXPAND_DURATION_S, ease: 'easeInOut' }}
               className="overflow-hidden w-full text-center"
             >
               <p className="text-sm text-zen-400 mb-2 font-medium">

@@ -14,6 +14,10 @@ import {
   Clock
 } from 'lucide-react'
 import { siteConfig, hasLink } from '@/lib/config'
+import {
+  CARD_PREVIEW_HOVER_DELAY_MS,
+  CARD_PREVIEW_EXPAND_DURATION_S
+} from '@/lib/cardPreviewTiming'
 import content from '@/data/content.json'
 
 interface SocialLink {
@@ -111,7 +115,7 @@ export default function Footer() {
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleHoverStart = useCallback((name: string) => {
-    hoverTimer.current = setTimeout(() => setHoveredLink(name), 350)
+    hoverTimer.current = setTimeout(() => setHoveredLink(name), CARD_PREVIEW_HOVER_DELAY_MS)
   }, [])
 
   const handleHoverEnd = useCallback(() => {
@@ -180,7 +184,7 @@ export default function Footer() {
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.5, ease: 'easeInOut' }}
+                                transition={{ duration: CARD_PREVIEW_EXPAND_DURATION_S, ease: 'easeInOut' }}
                                 className="space-y-1"
                               >
                                 <p className="text-xs font-medium text-zen-300">
@@ -224,7 +228,16 @@ export default function Footer() {
             {/* Copyright */}
             <div className="text-sm text-zen-500">
               <p>
-                © {new Date().getFullYear()} {siteConfig.name}.
+                ©{' '}
+                <a
+                  href="https://github.com/anantham/portfolio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-zen-300 transition-colors"
+                >
+                  {new Date().getFullYear()} {siteConfig.name}
+                </a>
+                .
               </p>
             </div>
 
